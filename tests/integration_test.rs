@@ -29,7 +29,7 @@ fn test_golden_output_match() -> Result<(), Box<dyn std::error::Error>> {
     println!("BED: {:?}", bed_path);
 
     // Run the binary
-    let mut cmd = Command::cargo_bin("rgmatch")?;
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_rgmatch"));
     cmd.arg("-g")
         .arg(&gtf_path)
         .arg("-b")

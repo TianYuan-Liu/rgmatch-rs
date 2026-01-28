@@ -39,4 +39,5 @@ pub mod parser;
 pub mod types;
 
 pub use config::Config;
+pub use parser::{BedReader, GtfData};
 pub use types::{Area, Candidate, Gene, Region, ReportLevel, Strand, Transcript};

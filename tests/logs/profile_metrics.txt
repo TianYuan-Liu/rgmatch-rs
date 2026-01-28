@@ -1,0 +1,30 @@
+Parsing GTF file: tests/data/full_genome.gtf
+Using parallel mode with 8 threads
+Processing BED file: tests/data/full_peaks.bed
+Writing output to: /tmp/profile_output.txt (25638260 lines)
+
+=== Performance Metrics ===
+Regions processed: 2348854
+Lines written: 25638260
+
+Worker time (cumulative across all workers):
+  Matching:       167442.34 ms
+  Channel wait:        0.27 ms
+
+Writer time:
+  Formatting:      15594.69 ms
+  I/O:              2803.33 ms
+
+Channel congestion:
+  Max pending results: 27 (channel bound: 2000)
+  ✓  Channel uncongested - Workers are bottleneck
+
+Worker breakdown:
+  Matching: 100.0%
+  Waiting:  0.0%
+Writer breakdown:
+  Format: 84.8%
+  I/O:    15.2%
+=== End Performance Metrics ===
+
+Done!

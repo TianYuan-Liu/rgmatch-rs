@@ -108,6 +108,12 @@ impl Config {
             self.distance = kb * 1000;
         }
     }
+
+    /// Get the maximum distance to consider for lookback
+    pub fn max_lookback_distance(&self) -> i64 {
+        let max_float = self.tss.max(self.tts).max(self.promoter);
+        self.distance.max(max_float as i64)
+    }
 }
 
 #[cfg(test)]

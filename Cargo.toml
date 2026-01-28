@@ -12,6 +12,9 @@ flate2 = "1"
 anyhow = "1"
 ahash = "0.8"
 indexmap = "2.13.0"
+rayon = "1.10"
+crossbeam-channel = "0.5"
+num_cpus = "1.16"
 
 [profile.release]
 opt-level = 3
@@ -25,4 +28,5 @@ path = "src/main.rs"
 [dev-dependencies]
 assert_cmd = "2"
 predicates = "3"
+tempfile = "3"
 

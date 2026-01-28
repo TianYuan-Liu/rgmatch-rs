@@ -3,10 +3,9 @@
 //! This module handles writing formatted output to files with proper
 //! column ordering and number formatting.
 
-use anyhow::{Context, Result};
-use std::fs::File;
-use std::io::{BufWriter, Write};
-use std::path::Path;
+use anyhow::Result;
+
+use std::io::Write;
 
 use crate::parser::bed::get_bed_headers;
 use crate::types::{Candidate, Region};
@@ -63,29 +62,7 @@ pub fn format_output_line(region: &Region, candidate: &Candidate) -> String {
     line
 }
 
-/// Write all results to an output file.
-pub fn write_results(
-    path: &Path,
-    results: &[(Region, Vec<Candidate>)],
-    num_meta_columns: usize,
-) -> Result<()> {
-    let file = File::create(path).context("Failed to create output file")?;
-    let mut writer = BufWriter::new(file);
 
-    // Write header
-    write_header(&mut writer, num_meta_columns)?;
-
-    // Write each result
-    for (region, candidates) in results {
-        for candidate in candidates {
-            let line = format_output_line(region, candidate);
-            writeln!(writer, "{}", line)?;
-        }
-    }
-
-    writer.flush()?;
-    Ok(())
-}
 
 #[cfg(test)]
 mod tests {

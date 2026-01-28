@@ -11,6 +11,108 @@ use std::path::Path;
 
 use crate::types::Region;
 
+/// Streaming BED file reader for chunked processing.
+///
+/// This struct provides an iterator-like interface for reading BED files
+/// in chunks, enabling memory-efficient processing of large files.
+pub struct BedReader {
+    reader: Box<dyn BufRead + Send>,
+    num_meta_columns: usize,
+}
+
+impl BedReader {
+    /// Create a new BedReader from a file path (supports .gz).
+    pub fn new(path: &Path) -> Result<Self> {
+        let file = File::open(path).context("Failed to open BED file")?;
+
+        let reader: Box<dyn BufRead + Send> = if path.to_string_lossy().ends_with(".gz") {
+            Box::new(BufReader::new(GzDecoder::new(file)))
+        } else {
+            Box::new(BufReader::new(file))
+        };
+
+        Ok(BedReader {
+            reader,
+            num_meta_columns: 0,
+        })
+    }
+
+    /// Get the number of metadata columns found so far.
+    pub fn num_meta_columns(&self) -> usize {
+        self.num_meta_columns
+    }
+
+    /// Read the next chunk of regions from the BED file.
+    ///
+    /// Returns `None` when EOF is reached. The regions are returned in file order,
+    /// preserving the original ordering for deterministic output.
+    pub fn read_chunk(&mut self, size: usize) -> Result<Option<Vec<Region>>> {
+        let mut regions = Vec::with_capacity(size);
+        let mut line = String::new();
+
+        while regions.len() < size {
+            line.clear();
+            let bytes_read = self
+                .reader
+                .read_line(&mut line)
+                .context("Failed to read BED line")?;
+
+            if bytes_read == 0 {
+                // EOF reached
+                break;
+            }
+
+            // Skip empty lines
+            let trimmed = line.trim_end();
+            if trimmed.is_empty() {
+                continue;
+            }
+
+            if let Some(region) = self.parse_line(trimmed) {
+                regions.push(region);
+            }
+        }
+
+        if regions.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(regions))
+        }
+    }
+
+    /// Parse a single BED line into a Region.
+    fn parse_line(&mut self, line: &str) -> Option<Region> {
+        let fields: Vec<&str> = line.split('\t').collect();
+
+        // Need at least 3 columns: chrom, start, end
+        if fields.len() < 3 {
+            return None;
+        }
+
+        let chrom = fields[0].to_string();
+
+        // Try to parse start and end as integers
+        // If they fail (e.g., header line), skip this line
+        let start: i64 = fields[1].parse().ok()?;
+        let end: i64 = fields[2].parse().ok()?;
+
+        // Extract up to 9 additional BED columns as metadata
+        let metadata: Vec<String> = fields
+            .iter()
+            .skip(3)
+            .take(9)
+            .map(|s| s.to_string())
+            .collect();
+
+        // Track the maximum number of metadata columns
+        if metadata.len() > self.num_meta_columns {
+            self.num_meta_columns = metadata.len();
+        }
+
+        Some(Region::new(chrom, start, end, metadata))
+    }
+}
+
 /// Result of parsing a BED file.
 pub struct BedData {
     /// Regions organized by chromosome.
@@ -204,5 +306,70 @@ mod tests {
         let region = Region::new("chr1".to_string(), 100, 201, vec![]);
         // (100 + 201) / 2 = 150 (integer division)
         assert_eq!(region.midpoint(), 150);
+    }
+
+    #[test]
+    fn test_bed_reader_read_chunk() {
+        use std::io::Write;
+        use tempfile::NamedTempFile;
+
+        // Create a temporary BED file
+        let mut temp_file = NamedTempFile::new().unwrap();
+        writeln!(temp_file, "chr1\t100\t200\tregion1").unwrap();
+        writeln!(temp_file, "chr1\t300\t400\tregion2").unwrap();
+        writeln!(temp_file, "chr2\t500\t600\tregion3").unwrap();
+        writeln!(temp_file, "chr2\t700\t800\tregion4").unwrap();
+        writeln!(temp_file, "chr3\t900\t1000\tregion5").unwrap();
+        temp_file.flush().unwrap();
+
+        let mut reader = BedReader::new(temp_file.path()).unwrap();
+
+        // Read first chunk of 2
+        let chunk1 = reader.read_chunk(2).unwrap().unwrap();
+        assert_eq!(chunk1.len(), 2);
+        assert_eq!(chunk1[0].chrom, "chr1");
+        assert_eq!(chunk1[0].start, 100);
+        assert_eq!(chunk1[1].chrom, "chr1");
+        assert_eq!(chunk1[1].start, 300);
+
+        // Read second chunk of 2
+        let chunk2 = reader.read_chunk(2).unwrap().unwrap();
+        assert_eq!(chunk2.len(), 2);
+        assert_eq!(chunk2[0].chrom, "chr2");
+        assert_eq!(chunk2[0].start, 500);
+
+        // Read last chunk (only 1 region left)
+        let chunk3 = reader.read_chunk(2).unwrap().unwrap();
+        assert_eq!(chunk3.len(), 1);
+        assert_eq!(chunk3[0].chrom, "chr3");
+
+        // EOF
+        let chunk4 = reader.read_chunk(2).unwrap();
+        assert!(chunk4.is_none());
+
+        // Verify metadata columns tracked
+        assert_eq!(reader.num_meta_columns(), 1);
+    }
+
+    #[test]
+    fn test_bed_reader_skips_headers_and_empty_lines() {
+        use std::io::Write;
+        use tempfile::NamedTempFile;
+
+        let mut temp_file = NamedTempFile::new().unwrap();
+        writeln!(temp_file, "chrom\tstart\tend\tname").unwrap(); // header
+        writeln!(temp_file, "").unwrap(); // empty line
+        writeln!(temp_file, "chr1\t100\t200\tregion1").unwrap();
+        writeln!(temp_file, "").unwrap(); // empty line
+        writeln!(temp_file, "chr1\t300\t400\tregion2").unwrap();
+        temp_file.flush().unwrap();
+
+        let mut reader = BedReader::new(temp_file.path()).unwrap();
+        let chunk = reader.read_chunk(10).unwrap().unwrap();
+
+        // Should only get 2 valid regions
+        assert_eq!(chunk.len(), 2);
+        assert_eq!(chunk[0].start, 100);
+        assert_eq!(chunk[1].start, 300);
     }
 }

@@ -3,5 +3,5 @@
 pub mod bed;
 pub mod gtf;
 
-pub use bed::parse_bed;
-pub use gtf::parse_gtf;
+pub use bed::{parse_bed, BedReader};
+pub use gtf::{parse_gtf, GtfData};

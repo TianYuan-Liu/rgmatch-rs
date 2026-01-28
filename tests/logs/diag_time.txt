@@ -1,0 +1,22 @@
+Parsing GTF file: /Users/tianyuan/Desktop/github_dev/rgmatch-v2/rgmatch-rs/tests/data/full_genome.gtf
+Processing BED file: /Users/tianyuan/Desktop/github_dev/rgmatch-v2/rgmatch-rs/tests/data/full_peaks.bed
+Writing output to: /Users/tianyuan/Desktop/github_dev/rgmatch-v2/rgmatch-rs/tests/logs/bench_output.txt
+Done!
+      157.42 real       151.67 user         3.55 sys
+           505249792  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+               63288  page reclaims
+                  27  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                 974  voluntary context switches
+              136091  involuntary context switches
+       3786677110024  instructions retired
+        617785365303  cycles elapsed
+           507249360  peak memory footprint

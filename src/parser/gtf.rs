@@ -13,9 +13,12 @@ use std::path::Path;
 use crate::types::{Exon, Gene, Strand, Transcript};
 
 /// Result of parsing a GTF file.
+#[derive(Clone)]
 pub struct GtfData {
     /// Genes organized by chromosome.
     pub genes_by_chrom: AHashMap<String, Vec<Gene>>,
+    /// Maximum gene length per chromosome.
+    pub max_lengths: AHashMap<String, i64>,
 }
 
 /// Parse a GTF file and return organized gene data.
@@ -204,16 +207,23 @@ fn parse_gtf_reader<R: BufRead>(
 
     // Build final genes_by_chrom with actual Gene objects
     let mut result_genes: AHashMap<String, Vec<Gene>> = AHashMap::new();
+    let mut max_lengths: AHashMap<String, i64> = AHashMap::new();
+
     for (chrom, gene_ids) in genes_by_chrom {
         let genes: Vec<Gene> = gene_ids
             .into_iter()
             .filter_map(|id| all_genes.remove(&id))
             .collect();
+        
+        let max_len = genes.iter().map(|g| g.end - g.start).max().unwrap_or(0);
+        max_lengths.insert(chrom.clone(), max_len);
+        
         result_genes.insert(chrom, genes);
     }
 
     Ok(GtfData {
         genes_by_chrom: result_genes,
+        max_lengths,
     })
 }
 

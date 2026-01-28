@@ -19,7 +19,7 @@ pub fn match_region_to_genes(
     region: &Region,
     genes: &[Gene],
     config: &Config,
-    last_index: &mut usize,
+    last_index: usize,
 ) -> Vec<Candidate> {
     let start = region.start;
     let end = region.end;
@@ -27,17 +27,14 @@ pub fn match_region_to_genes(
     let region_length = region.length();
 
     // Start analysis
+    // Start analysis
     let mut down: i64 = i64::MAX; // Distance to TTS
     let mut exon_down: Option<Candidate> = None;
-    let mut last_index_down = *last_index;
 
     let mut upst: i64 = i64::MAX; // Distance to TSS
     let mut exon_up: Option<Candidate> = None;
-    let mut last_index_up = *last_index;
 
-    let mut last_index_body = *last_index;
 
-    let mut block_last_index: i64 = -1;
 
     // When flag_gene_body is false, we will report downstream or upstream exons
     // Otherwise, we will only report the overlapped exons
@@ -49,24 +46,30 @@ pub fn match_region_to_genes(
     // These maps contain as key [geneID_transcriptID] and as values a vector
     // containing [(Candidate, area_length, overlapped_area), ...]
     // This is because there will be regions that will overlap different introns or exons
+    // These maps contain as key [geneID_transcriptID] and as values a vector
+    // containing [(Candidate, area_length, overlapped_area), ...]
+    // This is because there will be regions that will overlap different introns or exons
     let mut my_introns: IndexMap<String, Vec<(Candidate, i64, i64)>> = IndexMap::new();
     let mut my_gene_bodys: IndexMap<String, Vec<(Candidate, i64, i64)>> = IndexMap::new();
 
-    for (i, gene) in genes.iter().enumerate().skip(*last_index) {
+    for (_i, gene) in genes.iter().enumerate().skip(last_index) {
         let distance_to_start_gene = (gene.start - pm).abs();
 
         // Check if we should stop processing genes
-        if gene.start > end
-            && (flag_gene_body || down < distance_to_start_gene || upst < distance_to_start_gene)
-        {
-            // Update the point from we will keep on looking at exons for new regions
-            if block_last_index == -1 {
-                *last_index = last_index_down.min(last_index_up);
-                *last_index = last_index_body.min(*last_index);
-            } else {
-                *last_index = block_last_index as usize;
+        // Since genes are sorted by start, if the gene starts after our region ends (plus lookahead),
+        // no subsequent genes can possibly overlap.
+        // Note: The lookahead logic depends on whether we are looking for UPSTREAM/DOWNSTREAM
+        if gene.start > end {
+            // Logic for quitting early:
+            // If we are looking for downstream (down), checking gene.start > end is not enough if we want nearest.
+            // But 'down' is initialized to MAX.
+            // The python logic seems to be: if we found something closer than current distance, stop.
+            // Simplified check matching Python structure:
+            if flag_gene_body || (down < distance_to_start_gene && upst < distance_to_start_gene) {
+                break;
             }
-            break;
+            // Additional safety check for performance: if gene starts WAY after, we can definitely stop?
+            // Existing logic relies on `down` and `upst` being updated.
         }
 
         // Check associations
@@ -91,9 +94,8 @@ pub fn match_region_to_genes(
                 //                |--------------|
                 if exon.end < start {
                     // Check whether the current gene also covers the region
-                    if block_last_index == -1 && gene.end > start {
-                        block_last_index = i as i64;
-                    }
+                    // Check whether the current gene also covers the region
+
 
                     let dist_tmp = pm - exon.end;
 
@@ -114,7 +116,6 @@ pub fn match_region_to_genes(
                                 -1.0,
                                 tss_distance,
                             ));
-                            last_index_down = i;
                         } else if gene.strand == Strand::Negative && dist_tmp < upst {
                             upst = dist_tmp;
                             exon_up = Some(Candidate::new(
@@ -130,7 +131,6 @@ pub fn match_region_to_genes(
                                 -1.0,
                                 tss_distance,
                             ));
-                            last_index_up = i;
                         }
                     } else {
                         // Check if the next exon is closer to the region
@@ -204,10 +204,6 @@ pub fn match_region_to_genes(
                 //     <--------->
                 //          |--------------|
                 else if start <= exon.end && exon.end <= end && exon.start < start {
-                    if last_index_body == *last_index {
-                        last_index_body = i;
-                    }
-
                     flag_gene_body = true;
                     let body_overlap = exon.end - start + 1;
                     let pctg_region = (body_overlap as f64 / region_length as f64) * 100.0;
@@ -826,10 +822,6 @@ pub fn match_region_to_genes(
                 //             <----------------->
                 //                 |---------|
                 else if exon.start <= start && start <= exon.end && end < exon.end {
-                    if last_index_body == *last_index {
-                        last_index_body = i;
-                    }
-
                     flag_gene_body = true;
                     let pctg_region = 100.0;
                     let pctg_area = (region_length as f64 / exon_length as f64) * 100.0;
@@ -1134,22 +1126,45 @@ pub fn process_candidates_for_output(
 }
 
 /// Main entry point for matching regions to genes.
+/// Main entry point for matching regions to genes.
 pub fn match_regions_to_genes(
     regions: &[Region],
-    genes: &mut [Gene],
+    genes: &[Gene],
     config: &Config,
+    max_gene_length: i64,
 ) -> Vec<(Region, Vec<Candidate>)> {
-    // Sort genes by start position
-    genes.sort_by_key(|g| g.start);
+    // Genes must be pre-sorted by start position
 
     let mut results = Vec::new();
+
+    let max_lookback = max_gene_length + config.max_lookback_distance();
     let mut last_index = 0;
 
     for region in regions {
-        let candidates = match_region_to_genes(region, genes, config, &mut last_index);
+        // Calculate safe search start for this region
+        // We need to look back enough to find genes that started earlier but extend into this region
+        let search_start = region.start.saturating_sub(max_lookback);
+
+        // Advance last_index safe: skip genes that end before the search start
+        // These genes can never overlap with the current region or any future region (since regions are sorted by start)
+        // Optimization: Use a simple while loop as it is O(N) amortized over all regions
+        while last_index < genes.len() && genes[last_index].end < search_start {
+            last_index += 1;
+        }
+
+        // Pass the calculated start index by value (no mutation allowed inside)
+        let candidates = match_region_to_genes(region, genes, config, last_index);
         let processed = process_candidates_for_output(candidates, config);
         results.push((region.clone(), processed));
     }
 
     results
+}
+
+/// Find the index of the first gene that could potentially overlap with a region.
+///
+/// Uses binary search to find the first gene with `start >= search_start`.
+/// This is safe for random access patterns (unsorted regions).
+pub fn find_search_start_index(genes: &[Gene], search_start: i64) -> usize {
+    genes.partition_point(|g| g.start < search_start)
 }

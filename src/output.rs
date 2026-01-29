@@ -62,8 +62,6 @@ pub fn format_output_line(region: &Region, candidate: &Candidate) -> String {
     line
 }
 
-
-
 #[cfg(test)]
 mod tests {
     use super::*;

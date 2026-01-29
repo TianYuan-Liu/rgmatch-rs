@@ -4,6 +4,7 @@
 //! region-to-gene matching process.
 
 use std::fmt;
+use std::str::FromStr;
 
 /// Strand orientation for genomic features.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -12,16 +13,31 @@ pub enum Strand {
     Negative,
 }
 
-impl Strand {
-    /// Parse strand from a string ('+' or '-').
-    pub fn from_str(s: &str) -> Option<Self> {
+/// Error type for parsing strand from string.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParseStrandError;
+
+impl fmt::Display for ParseStrandError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "invalid strand: expected '+' or '-'")
+    }
+}
+
+impl std::error::Error for ParseStrandError {}
+
+impl FromStr for Strand {
+    type Err = ParseStrandError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "+" => Some(Strand::Positive),
-            "-" => Some(Strand::Negative),
-            _ => None,
+            "+" => Ok(Strand::Positive),
+            "-" => Ok(Strand::Negative),
+            _ => Err(ParseStrandError),
         }
     }
+}
 
+impl Strand {
     /// Convert strand to string representation.
     pub fn as_str(&self) -> &'static str {
         match self {
@@ -50,22 +66,37 @@ pub enum Area {
     Downstream,
 }
 
-impl Area {
-    /// Parse area from a string.
-    pub fn from_str(s: &str) -> Option<Self> {
+/// Error type for parsing area from string.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParseAreaError;
+
+impl fmt::Display for ParseAreaError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "invalid area type")
+    }
+}
+
+impl std::error::Error for ParseAreaError {}
+
+impl FromStr for Area {
+    type Err = ParseAreaError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "TSS" => Some(Area::Tss),
-            "1st_EXON" => Some(Area::FirstExon),
-            "PROMOTER" => Some(Area::Promoter),
-            "TTS" => Some(Area::Tts),
-            "INTRON" => Some(Area::Intron),
-            "GENE_BODY" => Some(Area::GeneBody),
-            "UPSTREAM" => Some(Area::Upstream),
-            "DOWNSTREAM" => Some(Area::Downstream),
-            _ => None,
+            "TSS" => Ok(Area::Tss),
+            "1st_EXON" => Ok(Area::FirstExon),
+            "PROMOTER" => Ok(Area::Promoter),
+            "TTS" => Ok(Area::Tts),
+            "INTRON" => Ok(Area::Intron),
+            "GENE_BODY" => Ok(Area::GeneBody),
+            "UPSTREAM" => Ok(Area::Upstream),
+            "DOWNSTREAM" => Ok(Area::Downstream),
+            _ => Err(ParseAreaError),
         }
     }
+}
 
+impl Area {
     /// Convert area to string representation.
     pub fn as_str(&self) -> &'static str {
         match self {
@@ -313,7 +344,7 @@ impl Region {
 
     /// Get the region ID (chrom_start_end).
     pub fn id(&self) -> String {
-        format!("{}_{}_{}",self.chrom, self.start, self.end)
+        format!("{}_{}_{}", self.chrom, self.start, self.end)
     }
 }
 
@@ -325,14 +356,30 @@ pub enum ReportLevel {
     Gene,
 }
 
-impl ReportLevel {
-    /// Parse report level from a string.
-    pub fn from_str(s: &str) -> Option<Self> {
+/// Error type for parsing report level from string.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParseReportLevelError;
+
+impl fmt::Display for ParseReportLevelError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "invalid report level: expected 'exon', 'transcript', or 'gene'"
+        )
+    }
+}
+
+impl std::error::Error for ParseReportLevelError {}
+
+impl FromStr for ReportLevel {
+    type Err = ParseReportLevelError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "exon" => Some(ReportLevel::Exon),
-            "transcript" => Some(ReportLevel::Transcript),
-            "gene" => Some(ReportLevel::Gene),
-            _ => None,
+            "exon" => Ok(ReportLevel::Exon),
+            "transcript" => Ok(ReportLevel::Transcript),
+            "gene" => Ok(ReportLevel::Gene),
+            _ => Err(ParseReportLevelError),
         }
     }
 }
@@ -343,17 +390,17 @@ mod tests {
 
     #[test]
     fn test_strand_parsing() {
-        assert_eq!(Strand::from_str("+"), Some(Strand::Positive));
-        assert_eq!(Strand::from_str("-"), Some(Strand::Negative));
-        assert_eq!(Strand::from_str("."), None);
+        assert_eq!("+".parse::<Strand>(), Ok(Strand::Positive));
+        assert_eq!("-".parse::<Strand>(), Ok(Strand::Negative));
+        assert!(".".parse::<Strand>().is_err());
     }
 
     #[test]
     fn test_area_parsing() {
-        assert_eq!(Area::from_str("TSS"), Some(Area::Tss));
-        assert_eq!(Area::from_str("1st_EXON"), Some(Area::FirstExon));
-        assert_eq!(Area::from_str("PROMOTER"), Some(Area::Promoter));
-        assert_eq!(Area::from_str("INVALID"), None);
+        assert_eq!("TSS".parse::<Area>(), Ok(Area::Tss));
+        assert_eq!("1st_EXON".parse::<Area>(), Ok(Area::FirstExon));
+        assert_eq!("PROMOTER".parse::<Area>(), Ok(Area::Promoter));
+        assert!("INVALID".parse::<Area>().is_err());
     }
 
     #[test]

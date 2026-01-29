@@ -127,10 +127,7 @@ pub struct BedData {
 pub fn parse_bed(path: &Path) -> Result<BedData> {
     let file = File::open(path).context("Failed to open BED file")?;
 
-    let reader: Box<dyn BufRead> = if path
-        .to_string_lossy()
-        .ends_with(".gz")
-    {
+    let reader: Box<dyn BufRead> = if path.to_string_lossy().ends_with(".gz") {
         Box::new(BufReader::new(GzDecoder::new(file)))
     } else {
         Box::new(BufReader::new(file))
@@ -358,9 +355,9 @@ mod tests {
 
         let mut temp_file = NamedTempFile::new().unwrap();
         writeln!(temp_file, "chrom\tstart\tend\tname").unwrap(); // header
-        writeln!(temp_file, "").unwrap(); // empty line
+        writeln!(temp_file).unwrap(); // empty line
         writeln!(temp_file, "chr1\t100\t200\tregion1").unwrap();
-        writeln!(temp_file, "").unwrap(); // empty line
+        writeln!(temp_file).unwrap(); // empty line
         writeln!(temp_file, "chr1\t300\t400\tregion2").unwrap();
         temp_file.flush().unwrap();
 

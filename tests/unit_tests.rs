@@ -453,9 +453,8 @@ mod test_config {
     #[test]
     fn test_parse_rules_valid() {
         let mut config = Config::new();
-        let result = config.parse_rules(
-            "DOWNSTREAM,UPSTREAM,GENE_BODY,INTRON,TTS,PROMOTER,1st_EXON,TSS",
-        );
+        let result =
+            config.parse_rules("DOWNSTREAM,UPSTREAM,GENE_BODY,INTRON,TTS,PROMOTER,1st_EXON,TSS");
         assert!(result);
         assert_eq!(config.rules.len(), 8);
         assert_eq!(config.rules[0], Area::Downstream);
@@ -479,9 +478,8 @@ mod test_config {
     #[test]
     fn test_parse_rules_case_sensitive() {
         let mut config = Config::new();
-        let result = config.parse_rules(
-            "tss,1st_exon,promoter,tts,intron,gene_body,upstream,downstream",
-        );
+        let result =
+            config.parse_rules("tss,1st_exon,promoter,tts,intron,gene_body,upstream,downstream");
         assert!(!result);
     }
 
@@ -536,18 +534,28 @@ mod test_bug_regression {
         let region = Region::new("chr1".into(), 100, 200, vec!["region1".into()]);
 
         // Single-exon gene - triggers Case 2 (partial overlap left on last exon)
-        let genes = vec![make_test_gene("GENE001", 51, 150, Strand::Positive, vec![(51, 150)])];
+        let genes = vec![make_test_gene(
+            "GENE001",
+            51,
+            150,
+            Strand::Positive,
+            vec![(51, 150)],
+        )];
 
-        let mut last_index = 0;
-        let candidates = match_region_to_genes(&region, &genes, &config, &mut last_index);
+        let last_index = 0;
+        let candidates = match_region_to_genes(&region, &genes, &config, last_index);
 
         // Count DOWNSTREAM candidates for GENE001
-        let downstream_count = candidates.iter()
+        let downstream_count = candidates
+            .iter()
             .filter(|c| c.gene == "GENE001" && c.area == Area::Downstream)
             .count();
 
-        assert_eq!(downstream_count, 1,
-            "GENE001 DOWNSTREAM should appear exactly once, not {}", downstream_count);
+        assert_eq!(
+            downstream_count, 1,
+            "GENE001 DOWNSTREAM should appear exactly once, not {}",
+            downstream_count
+        );
     }
 
     /// Bug #1: Test that Case 3 (exon inside region) doesn't produce duplicate DOWNSTREAM
@@ -557,17 +565,27 @@ mod test_bug_regression {
         let config = Config::default();
         let region = Region::new("chr1".into(), 1000, 1300, vec!["region2".into()]);
 
-        let genes = vec![make_test_gene("GENE002", 1050, 1200, Strand::Positive, vec![(1050, 1200)])];
+        let genes = vec![make_test_gene(
+            "GENE002",
+            1050,
+            1200,
+            Strand::Positive,
+            vec![(1050, 1200)],
+        )];
 
-        let mut last_index = 0;
-        let candidates = match_region_to_genes(&region, &genes, &config, &mut last_index);
+        let last_index = 0;
+        let candidates = match_region_to_genes(&region, &genes, &config, last_index);
 
-        let downstream_count = candidates.iter()
+        let downstream_count = candidates
+            .iter()
             .filter(|c| c.gene == "GENE002" && c.area == Area::Downstream)
             .count();
 
-        assert_eq!(downstream_count, 1,
-            "GENE002 DOWNSTREAM should appear exactly once, not {}", downstream_count);
+        assert_eq!(
+            downstream_count, 1,
+            "GENE002 DOWNSTREAM should appear exactly once, not {}",
+            downstream_count
+        );
     }
 
     /// Bug #2: Test that proximity candidates are preserved when overlapping gene comes later
@@ -581,26 +599,42 @@ mod test_bug_regression {
 
         let genes = vec![
             // GENE003: ends at 4900, 100bp before region - should be DOWNSTREAM proximity
-            make_test_gene("GENE003", 4700, 4900, Strand::Positive, vec![(4700, 4750), (4800, 4900)]),
+            make_test_gene(
+                "GENE003",
+                4700,
+                4900,
+                Strand::Positive,
+                vec![(4700, 4750), (4800, 4900)],
+            ),
             // GENE004: exon 2 overlaps region at [4950, 5050]
-            make_test_gene("GENE004", 4850, 5200, Strand::Positive, vec![(4850, 4900), (4950, 5050)]),
+            make_test_gene(
+                "GENE004",
+                4850,
+                5200,
+                Strand::Positive,
+                vec![(4850, 4900), (4950, 5050)],
+            ),
         ];
 
-        let mut last_index = 0;
-        let candidates = match_region_to_genes(&region, &genes, &config, &mut last_index);
+        let last_index = 0;
+        let candidates = match_region_to_genes(&region, &genes, &config, last_index);
 
         // GENE003 DOWNSTREAM should be preserved (proximity candidate)
-        let gene003_downstream = candidates.iter()
+        let gene003_downstream = candidates
+            .iter()
             .any(|c| c.gene == "GENE003" && c.area == Area::Downstream);
 
         // GENE004 should also have candidates (overlapping)
-        let gene004_present = candidates.iter()
-            .any(|c| c.gene == "GENE004");
+        let gene004_present = candidates.iter().any(|c| c.gene == "GENE004");
 
-        assert!(gene003_downstream,
-            "GENE003 DOWNSTREAM proximity candidate should be preserved");
-        assert!(gene004_present,
-            "GENE004 overlapping candidate should be present");
+        assert!(
+            gene003_downstream,
+            "GENE003 DOWNSTREAM proximity candidate should be preserved"
+        );
+        assert!(
+            gene004_present,
+            "GENE004 overlapping candidate should be present"
+        );
     }
 
     /// Combined test: no duplicates across all test regions
@@ -617,22 +651,39 @@ mod test_bug_regression {
         let genes = vec![
             make_test_gene("GENE001", 51, 150, Strand::Positive, vec![(51, 150)]),
             make_test_gene("GENE002", 1050, 1200, Strand::Positive, vec![(1050, 1200)]),
-            make_test_gene("GENE003", 4700, 4900, Strand::Positive, vec![(4700, 4750), (4800, 4900)]),
-            make_test_gene("GENE004", 4850, 5200, Strand::Positive, vec![(4850, 4900), (4950, 5050)]),
+            make_test_gene(
+                "GENE003",
+                4700,
+                4900,
+                Strand::Positive,
+                vec![(4700, 4750), (4800, 4900)],
+            ),
+            make_test_gene(
+                "GENE004",
+                4850,
+                5200,
+                Strand::Positive,
+                vec![(4850, 4900), (4950, 5050)],
+            ),
         ];
 
         for region in &regions {
-            let mut last_index = 0;
-            let candidates = match_region_to_genes(region, &genes, &config, &mut last_index);
+            let last_index = 0;
+            let candidates = match_region_to_genes(region, &genes, &config, last_index);
 
             // Create unique key for each candidate
-            let keys: Vec<String> = candidates.iter()
+            let keys: Vec<String> = candidates
+                .iter()
                 .map(|c| format!("{}_{}_{}", c.gene, c.transcript, c.area))
                 .collect();
             let unique_keys: HashSet<_> = keys.iter().collect();
 
-            assert_eq!(keys.len(), unique_keys.len(),
-                "Duplicate candidates found for region {:?}", region.id());
+            assert_eq!(
+                keys.len(),
+                unique_keys.len(),
+                "Duplicate candidates found for region {:?}",
+                region.id()
+            );
         }
     }
 }

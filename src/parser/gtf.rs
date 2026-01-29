@@ -24,17 +24,10 @@ pub struct GtfData {
 /// Parse a GTF file and return organized gene data.
 ///
 /// Supports both plain text and gzip-compressed GTF files.
-pub fn parse_gtf(
-    path: &Path,
-    gene_id_tag: &str,
-    transcript_id_tag: &str,
-) -> Result<GtfData> {
+pub fn parse_gtf(path: &Path, gene_id_tag: &str, transcript_id_tag: &str) -> Result<GtfData> {
     let file = File::open(path).context("Failed to open GTF file")?;
 
-    let reader: Box<dyn BufRead> = if path
-        .to_string_lossy()
-        .ends_with(".gz")
-    {
+    let reader: Box<dyn BufRead> = if path.to_string_lossy().ends_with(".gz") {
         Box::new(BufReader::new(GzDecoder::new(file)))
     } else {
         Box::new(BufReader::new(file))
@@ -85,9 +78,9 @@ fn parse_gtf_reader<R: BufRead>(
         let strand_str = fields[6];
         let attributes = fields[8];
 
-        let strand = match Strand::from_str(strand_str) {
-            Some(s) => s,
-            None => continue, // Skip entries without valid strand
+        let strand = match strand_str.parse::<Strand>() {
+            Ok(s) => s,
+            Err(_) => continue, // Skip entries without valid strand
         };
 
         match feature_type {
@@ -214,10 +207,10 @@ fn parse_gtf_reader<R: BufRead>(
             .into_iter()
             .filter_map(|id| all_genes.remove(&id))
             .collect();
-        
+
         let max_len = genes.iter().map(|g| g.end - g.start).max().unwrap_or(0);
         max_lengths.insert(chrom.clone(), max_len);
-        
+
         result_genes.insert(chrom, genes);
     }
 

@@ -37,25 +37,23 @@ pub fn apply_rules(
     // This preserves "insertion order" (file order) to match Python behavior
     let mut key_order = Vec::new();
     let mut seen = AHashSet::new();
-    
+
     // We assume candidates are passed in order. We iterate them to find unique keys.
     for c in candidates {
         let key = &c.transcript;
         if grouped_by.contains_key(key) && !seen.contains(key) {
-             seen.insert(key);
-             key_order.push(key);
+            seen.insert(key);
+            key_order.push(key);
         }
     }
 
     // Add any keys from grouped_by that weren't in candidates (unlikely but safe)
-    let mut remaining_keys: Vec<&String> = grouped_by.keys()
-        .filter(|k| !seen.contains(*k))
-        .collect();
-    remaining_keys.sort(); 
+    let mut remaining_keys: Vec<&String> =
+        grouped_by.keys().filter(|k| !seen.contains(*k)).collect();
+    remaining_keys.sort();
     key_order.extend(remaining_keys);
 
     for key in key_order {
-
         let positions = &grouped_by[key];
         if positions.len() == 1 {
             to_report.push(candidates[positions[0]].clone());
@@ -164,18 +162,17 @@ pub fn select_transcript(
     // For select_transcript, it is grouped by Gene ID.
     let mut key_order = Vec::new();
     let mut seen = AHashSet::new();
-    
+
     for c in candidates {
         let key = &c.gene;
         if grouped_by.contains_key(key) && !seen.contains(key) {
-             seen.insert(key);
-             key_order.push(key);
+            seen.insert(key);
+            key_order.push(key);
         }
     }
 
-    let mut remaining_keys: Vec<&String> = grouped_by.keys()
-        .filter(|k| !seen.contains(*k))
-        .collect();
+    let mut remaining_keys: Vec<&String> =
+        grouped_by.keys().filter(|k| !seen.contains(*k)).collect();
     remaining_keys.sort();
     key_order.extend(remaining_keys);
 
@@ -190,10 +187,7 @@ pub fn select_transcript(
         let mut by_area: AHashMap<Area, Vec<usize>> = AHashMap::new();
         for &pos in positions {
             let candidate = &candidates[pos];
-            by_area
-                .entry(candidate.area)
-                .or_default()
-                .push(pos);
+            by_area.entry(candidate.area).or_default().push(pos);
         }
 
         // Apply rules to find winning area
@@ -208,9 +202,9 @@ pub fn select_transcript(
         // Fallback to first available candidate's Area if no rules match
         // "First" means the first one in the list of positions, which preserves order.
         if area_winner.is_none() {
-             if let Some(&first_pos) = positions.first() {
-                 area_winner = Some(candidates[first_pos].area);
-             }
+            if let Some(&first_pos) = positions.first() {
+                area_winner = Some(candidates[first_pos].area);
+            }
         }
 
         let area_winner = match area_winner {

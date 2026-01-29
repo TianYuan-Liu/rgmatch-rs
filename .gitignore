@@ -8,3 +8,10 @@
 
 # Ignore large data files
 tests/data/
+
+# OS-specific files
+.DS_Store
+
+# Editor files
+*.swp
+*.swo

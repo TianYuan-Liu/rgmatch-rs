@@ -27,14 +27,11 @@ pub fn match_region_to_genes(
     let region_length = region.length();
 
     // Start analysis
-    // Start analysis
     let mut down: i64 = i64::MAX; // Distance to TTS
     let mut exon_down: Option<Candidate> = None;
 
     let mut upst: i64 = i64::MAX; // Distance to TSS
     let mut exon_up: Option<Candidate> = None;
-
-
 
     // When flag_gene_body is false, we will report downstream or upstream exons
     // Otherwise, we will only report the overlapped exons
@@ -43,9 +40,6 @@ pub fn match_region_to_genes(
     // Array containing the relations that are going to be reported
     let mut final_output: Vec<Candidate> = Vec::new();
 
-    // These maps contain as key [geneID_transcriptID] and as values a vector
-    // containing [(Candidate, area_length, overlapped_area), ...]
-    // This is because there will be regions that will overlap different introns or exons
     // These maps contain as key [geneID_transcriptID] and as values a vector
     // containing [(Candidate, area_length, overlapped_area), ...]
     // This is because there will be regions that will overlap different introns or exons
@@ -65,7 +59,7 @@ pub fn match_region_to_genes(
             // But 'down' is initialized to MAX.
             // The python logic seems to be: if we found something closer than current distance, stop.
             // Simplified check matching Python structure:
-            if flag_gene_body || (down < distance_to_start_gene && upst < distance_to_start_gene) {
+            if flag_gene_body || down < distance_to_start_gene || upst < distance_to_start_gene {
                 break;
             }
             // Additional safety check for performance: if gene starts WAY after, we can definitely stop?
@@ -77,7 +71,7 @@ pub fn match_region_to_genes(
             let exons = &transcript.exons;
 
             // Calculate TSSdist using the first exon "start" position
-            let tss_distance = if exons[0].exon_number.as_ref().map(|s| s.as_str()) == Some("1") {
+            let tss_distance = if exons[0].exon_number.as_deref() == Some("1") {
                 pm - exons[0].start
             } else {
                 exons.last().unwrap().end - pm
@@ -93,7 +87,6 @@ pub fn match_region_to_genes(
                 // <--------->
                 //                |--------------|
                 if exon.end < start {
-                    // Check whether the current gene also covers the region
                     // Check whether the current gene also covers the region
 
 
@@ -282,7 +275,7 @@ pub fn match_region_to_genes(
                                             candidate.end,
                                             candidate.strand,
                                             candidate.exon_number.clone(),
-                                            Area::from_str(&tag).unwrap_or(Area::Downstream),
+                                            tag.parse().unwrap_or(Area::Downstream),
                                             candidate.transcript.clone(),
                                             candidate.gene.clone(),
                                             candidate.distance,
@@ -322,7 +315,7 @@ pub fn match_region_to_genes(
                                         candidate.end,
                                         candidate.strand,
                                         candidate.exon_number.clone(),
-                                        Area::from_str(&tag).unwrap_or(Area::Upstream),
+                                        tag.parse().unwrap_or(Area::Upstream),
                                         candidate.transcript.clone(),
                                         candidate.gene.clone(),
                                         candidate.distance,
@@ -438,7 +431,7 @@ pub fn match_region_to_genes(
                                         candidate.end,
                                         candidate.strand,
                                         candidate.exon_number.clone(),
-                                        Area::from_str(&tag).unwrap_or(Area::Downstream),
+                                        tag.parse().unwrap_or(Area::Downstream),
                                         candidate.transcript.clone(),
                                         candidate.gene.clone(),
                                         candidate.distance,
@@ -478,7 +471,7 @@ pub fn match_region_to_genes(
                                     candidate.end,
                                     candidate.strand,
                                     candidate.exon_number.clone(),
-                                    Area::from_str(&tag).unwrap_or(Area::Upstream),
+                                    tag.parse().unwrap_or(Area::Upstream),
                                     candidate.transcript.clone(),
                                     candidate.gene.clone(),
                                     candidate.distance,
@@ -569,7 +562,7 @@ pub fn match_region_to_genes(
                                             candidate.end,
                                             candidate.strand,
                                             candidate.exon_number.clone(),
-                                            Area::from_str(&tag).unwrap_or(Area::Downstream),
+                                            tag.parse().unwrap_or(Area::Downstream),
                                             candidate.transcript.clone(),
                                             candidate.gene.clone(),
                                             candidate.distance,
@@ -609,7 +602,7 @@ pub fn match_region_to_genes(
                                         candidate.end,
                                         candidate.strand,
                                         candidate.exon_number.clone(),
-                                        Area::from_str(&tag).unwrap_or(Area::Upstream),
+                                        tag.parse().unwrap_or(Area::Upstream),
                                         candidate.transcript.clone(),
                                         candidate.gene.clone(),
                                         candidate.distance,
@@ -724,7 +717,7 @@ pub fn match_region_to_genes(
                                         candidate.end,
                                         candidate.strand,
                                         candidate.exon_number.clone(),
-                                        Area::from_str(&tag).unwrap_or(Area::Downstream),
+                                        tag.parse().unwrap_or(Area::Downstream),
                                         candidate.transcript.clone(),
                                         candidate.gene.clone(),
                                         candidate.distance,
@@ -764,7 +757,7 @@ pub fn match_region_to_genes(
                                     candidate.end,
                                     candidate.strand,
                                     candidate.exon_number.clone(),
-                                    Area::from_str(&tag).unwrap_or(Area::Upstream),
+                                    tag.parse().unwrap_or(Area::Upstream),
                                     candidate.transcript.clone(),
                                     candidate.gene.clone(),
                                     candidate.distance,
@@ -931,7 +924,7 @@ pub fn match_region_to_genes(
                         exon_down_ref.end,
                         exon_down_ref.strand,
                         exon_down_ref.exon_number.clone(),
-                        Area::from_str(&tag).unwrap_or(Area::Downstream),
+                        tag.parse().unwrap_or(Area::Downstream),
                         exon_down_ref.transcript.clone(),
                         exon_down_ref.gene.clone(),
                         exon_down_ref.distance,
@@ -963,7 +956,7 @@ pub fn match_region_to_genes(
                     exon_up_ref.end,
                     exon_up_ref.strand,
                     exon_up_ref.exon_number.clone(),
-                    Area::from_str(&tag).unwrap_or(Area::Upstream),
+                    tag.parse().unwrap_or(Area::Upstream),
                     exon_up_ref.transcript.clone(),
                     exon_up_ref.gene.clone(),
                     exon_up_ref.distance,
@@ -1125,7 +1118,6 @@ pub fn process_candidates_for_output(
     }
 }
 
-/// Main entry point for matching regions to genes.
 /// Main entry point for matching regions to genes.
 pub fn match_regions_to_genes(
     regions: &[Region],

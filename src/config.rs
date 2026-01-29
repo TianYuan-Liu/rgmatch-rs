@@ -85,7 +85,7 @@ impl Config {
 
         for tag in parts {
             if valid_tags.contains(&tag) {
-                if let Some(area) = Area::from_str(tag) {
+                if let Ok(area) = tag.parse::<Area>() {
                     // Only add if not already present
                     if !new_rules.contains(&area) {
                         new_rules.push(area);
@@ -138,9 +138,8 @@ mod tests {
     #[test]
     fn test_parse_rules_valid() {
         let mut config = Config::new();
-        let result = config.parse_rules(
-            "DOWNSTREAM,UPSTREAM,GENE_BODY,INTRON,TTS,PROMOTER,1st_EXON,TSS",
-        );
+        let result =
+            config.parse_rules("DOWNSTREAM,UPSTREAM,GENE_BODY,INTRON,TTS,PROMOTER,1st_EXON,TSS");
         assert!(result);
         assert_eq!(config.rules.len(), 8);
         assert_eq!(config.rules[0], Area::Downstream);
@@ -150,9 +149,8 @@ mod tests {
     #[test]
     fn test_parse_rules_default_order() {
         let mut config = Config::new();
-        let result = config.parse_rules(
-            "TSS,1st_EXON,PROMOTER,TTS,INTRON,GENE_BODY,UPSTREAM,DOWNSTREAM",
-        );
+        let result =
+            config.parse_rules("TSS,1st_EXON,PROMOTER,TTS,INTRON,GENE_BODY,UPSTREAM,DOWNSTREAM");
         assert!(result);
         assert_eq!(config.rules.len(), 8);
     }
@@ -167,9 +165,8 @@ mod tests {
     #[test]
     fn test_parse_rules_unknown_tag() {
         let mut config = Config::new();
-        let result = config.parse_rules(
-            "TSS,1st_EXON,PROMOTER,TTS,INTRON,GENE_BODY,UPSTREAM,UNKNOWN",
-        );
+        let result =
+            config.parse_rules("TSS,1st_EXON,PROMOTER,TTS,INTRON,GENE_BODY,UPSTREAM,UNKNOWN");
         assert!(!result);
     }
 
@@ -183,9 +180,8 @@ mod tests {
     #[test]
     fn test_parse_rules_case_sensitive() {
         let mut config = Config::new();
-        let result = config.parse_rules(
-            "tss,1st_exon,promoter,tts,intron,gene_body,upstream,downstream",
-        );
+        let result =
+            config.parse_rules("tss,1st_exon,promoter,tts,intron,gene_body,upstream,downstream");
         assert!(!result);
     }
 
@@ -199,9 +195,8 @@ mod tests {
     #[test]
     fn test_parse_rules_whitespace() {
         let mut config = Config::new();
-        let result = config.parse_rules(
-            "TSS, 1st_EXON, PROMOTER, TTS, INTRON, GENE_BODY, UPSTREAM, DOWNSTREAM",
-        );
+        let result = config
+            .parse_rules("TSS, 1st_EXON, PROMOTER, TTS, INTRON, GENE_BODY, UPSTREAM, DOWNSTREAM");
         assert!(!result); // Spaces make tags invalid
     }
 

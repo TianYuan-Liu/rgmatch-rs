@@ -89,8 +89,10 @@ impl PerfMetrics {
     }
 
     fn print_summary(&self) {
-        let worker_matching_ms = self.worker_matching_ns.load(Ordering::Relaxed) as f64 / 1_000_000.0;
-        let worker_channel_wait_ms = self.worker_channel_wait_ns.load(Ordering::Relaxed) as f64 / 1_000_000.0;
+        let worker_matching_ms =
+            self.worker_matching_ns.load(Ordering::Relaxed) as f64 / 1_000_000.0;
+        let worker_channel_wait_ms =
+            self.worker_channel_wait_ns.load(Ordering::Relaxed) as f64 / 1_000_000.0;
         let writer_format_ms = self.writer_format_ns.load(Ordering::Relaxed) as f64 / 1_000_000.0;
         let writer_io_ms = self.writer_io_ns.load(Ordering::Relaxed) as f64 / 1_000_000.0;
         let regions = self.regions_processed.load(Ordering::Relaxed);
@@ -110,7 +112,10 @@ impl PerfMetrics {
         eprintln!("  I/O:           {:>10.2} ms", writer_io_ms);
         eprintln!();
         eprintln!("Channel congestion:");
-        eprintln!("  Max pending results: {} (channel bound: 2000)", max_pending);
+        eprintln!(
+            "  Max pending results: {} (channel bound: 2000)",
+            max_pending
+        );
         if max_pending >= 1900 {
             eprintln!("  ⚠️  Channel nearly full - WRITER IS BOTTLENECK");
         } else if max_pending < 100 {
@@ -125,8 +130,14 @@ impl PerfMetrics {
         let total_writer = writer_format_ms + writer_io_ms;
         if total_worker > 0.0 {
             eprintln!("Worker breakdown:");
-            eprintln!("  Matching: {:.1}%", 100.0 * worker_matching_ms / total_worker);
-            eprintln!("  Waiting:  {:.1}%", 100.0 * worker_channel_wait_ms / total_worker);
+            eprintln!(
+                "  Matching: {:.1}%",
+                100.0 * worker_matching_ms / total_worker
+            );
+            eprintln!(
+                "  Waiting:  {:.1}%",
+                100.0 * worker_channel_wait_ms / total_worker
+            );
         }
         if total_writer > 0.0 {
             eprintln!("Writer breakdown:");
@@ -185,7 +196,11 @@ struct Args {
     perc_region: f64,
 
     /// Priority rules (comma-separated)
-    #[arg(short = 'R', long = "rules", default_value = "TSS,1st_EXON,PROMOTER,TTS,INTRON,GENE_BODY,UPSTREAM,DOWNSTREAM")]
+    #[arg(
+        short = 'R',
+        long = "rules",
+        default_value = "TSS,1st_EXON,PROMOTER,TTS,INTRON,GENE_BODY,UPSTREAM,DOWNSTREAM"
+    )]
     rules: String,
 
     /// GTF tag for gene ID
@@ -217,9 +232,10 @@ fn main() -> Result<()> {
     }
 
     // Parse report level
-    let level = ReportLevel::from_str(&args.report).context(
-        "Report can only be one of the following: exon, transcript or gene",
-    )?;
+    let level: ReportLevel = args
+        .report
+        .parse()
+        .context("Report can only be one of the following: exon, transcript or gene")?;
 
     // Build configuration
     let mut config = Config::new();
@@ -278,9 +294,14 @@ fn main() -> Result<()> {
     let mut gtf_data = parse_gtf(&args.gtf, &config.gene_id_tag, &config.transcript_id_tag)?;
 
     // Pre-sort genes for deterministic matching and performance
-    gtf_data.genes_by_chrom.values_mut().collect::<Vec<_>>().par_iter_mut().for_each(|genes| {
-        genes.sort_by(|a, b| a.start.cmp(&b.start).then(a.gene_id.cmp(&b.gene_id)));
-    });
+    gtf_data
+        .genes_by_chrom
+        .values_mut()
+        .collect::<Vec<_>>()
+        .par_iter_mut()
+        .for_each(|genes| {
+            genes.sort_by(|a, b| a.start.cmp(&b.start).then(a.gene_id.cmp(&b.gene_id)));
+        });
 
     // Validate batch_size
     if args.batch_size == 0 {
@@ -309,17 +330,17 @@ fn main() -> Result<()> {
 /// Sequential implementation with streaming.
 fn run_sequential(args: &Args, gtf_data: &GtfData, config: &Config) -> Result<()> {
     eprintln!("Processing BED file: {}", args.bed.display());
-    
+
     // Initialize streaming reader
     let mut bed_reader = BedReader::new(&args.bed)?;
-    
+
     // Output writer
     eprintln!("Writing output to: {}", args.output.display());
     let file = File::create(&args.output).context("Failed to create output file")?;
     let mut writer = BufWriter::new(file);
 
     let mut header_written = false;
-    
+
     // Optimization state
     let mut last_chrom = String::new();
     let mut last_start = -1;
@@ -336,41 +357,40 @@ fn run_sequential(args: &Args, gtf_data: &GtfData, config: &Config) -> Result<()
         for region in chunk {
             // Find genes for chrom
             if let Some(genes) = gtf_data.genes_by_chrom.get(&region.chrom) {
-                 let max_len = *gtf_data.max_lengths.get(&region.chrom).unwrap_or(&0);
-                 
-                 // Calculate safe search start (region start - max_len - distance)
-                 // Note: we must match the logic in match_regions_to_genes regarding max_lookback
-                 let max_lookback = max_len + config.max_lookback_distance();
-                 let search_start = region.start.saturating_sub(max_lookback);
-                 
-                 let start_index;
-                 if region.chrom == last_chrom && region.start >= last_start {
-                     // Optimistic: advance from last_index
-                     let mut idx = last_index;
-                     // Skip genes that end before search_start
-                     while idx < genes.len() && genes[idx].end < search_start {
-                         idx += 1;
-                     }
-                     start_index = idx;
-                 } else {
-                     // Reset / Binary search
-                     start_index = find_search_start_index(genes, search_start);
-                 }
-                 
-                 // Update cache
-                 last_chrom = region.chrom.clone();
-                 last_start = region.start;
-                 last_index = start_index;
-                 
-                 // Match
-                 let candidates = match_region_to_genes(&region, genes, config, start_index);
-                 let processed = process_candidates_for_output(candidates, config);
-                 
-                 // Write line
-                 for candidate in processed {
-                     let line = format_output_line(&region, &candidate);
-                     writeln!(writer, "{}", line)?;
-                 }
+                let max_len = *gtf_data.max_lengths.get(&region.chrom).unwrap_or(&0);
+
+                // Calculate safe search start (region start - max_len - distance)
+                // Note: we must match the logic in match_regions_to_genes regarding max_lookback
+                let max_lookback = max_len + config.max_lookback_distance();
+                let search_start = region.start.saturating_sub(max_lookback);
+
+                let start_index = if region.chrom == last_chrom && region.start >= last_start {
+                    // Optimistic: advance from last_index
+                    let mut idx = last_index;
+                    // Skip genes that end before search_start
+                    while idx < genes.len() && genes[idx].end < search_start {
+                        idx += 1;
+                    }
+                    idx
+                } else {
+                    // Reset / Binary search
+                    find_search_start_index(genes, search_start)
+                };
+
+                // Update cache
+                last_chrom = region.chrom.clone();
+                last_start = region.start;
+                last_index = start_index;
+
+                // Match
+                let candidates = match_region_to_genes(&region, genes, config, start_index);
+                let processed = process_candidates_for_output(candidates, config);
+
+                // Write line
+                for candidate in processed {
+                    let line = format_output_line(&region, &candidate);
+                    writeln!(writer, "{}", line)?;
+                }
             } else {
                 // If chromosome not in GTF, verify if we should reset cache?
                 // Probably yes to be safe, though chrom changed so next valid chrom will trigger binary search.
@@ -378,12 +398,12 @@ fn run_sequential(args: &Args, gtf_data: &GtfData, config: &Config) -> Result<()
             }
         }
     }
-    
+
     if !header_written {
-         // File was empty
-         write_header(&mut writer, 0)?;
+        // File was empty
+        write_header(&mut writer, 0)?;
     }
-    
+
     writer.flush()?;
     Ok(())
 }
@@ -410,13 +430,7 @@ struct WorkResult {
 /// 1. Parse the entire BED file and group regions by chromosome
 /// 2. Distribute chromosomes to workers (each chromosome is one work item)
 /// 3. Write results in sorted chromosome order
-/// Parallel implementation with streaming.
-fn run_parallel(
-    args: &Args,
-    gtf_data: GtfData,
-    config: &Config,
-    num_threads: usize,
-) -> Result<()> {
+fn run_parallel(args: &Args, gtf_data: GtfData, config: &Config, num_threads: usize) -> Result<()> {
     eprintln!("Using parallel mode with {} threads", num_threads);
 
     // Create performance metrics
@@ -439,7 +453,9 @@ fn run_parallel(
     let writer_handle = thread::spawn({
         let result_rx = result_rx.clone();
         let metrics = Arc::clone(&metrics);
-        move || -> Result<usize> { write_results_ordered(&output_path, result_rx, header_rx, &metrics) }
+        move || -> Result<usize> {
+            write_results_ordered(&output_path, result_rx, header_rx, &metrics)
+        }
     });
 
     // Spawn worker threads using rayon's thread pool
@@ -475,35 +491,30 @@ fn run_parallel(
     // Producer: Read BED in chunks
     eprintln!("Processing BED file: {}", args.bed.display());
     let mut bed_reader = BedReader::new(&args.bed)?;
-    
+
     let mut global_seq_id = 0;
-    
+
     // Send header info immediately if possible? No, header depends on first line read usually.
     // BedReader logic: read_chunk updates num_meta_columns.
     // So we need to read first chunk.
-    
-    loop {
-        match bed_reader.read_chunk(args.batch_size)? {
-            Some(chunk) => {
-                if global_seq_id == 0 {
-                    // Send header info
-                    let _ = header_tx.send(bed_reader.num_meta_columns());
-                }
-                
-                let work_item = WorkItem {
-                    seq_id: global_seq_id,
-                    regions: chunk,
-                };
-                
-                if work_tx.send(work_item).is_err() {
-                    break;
-                }
-                global_seq_id += 1;
-            },
-            None => break,
+
+    while let Some(chunk) = bed_reader.read_chunk(args.batch_size)? {
+        if global_seq_id == 0 {
+            // Send header info
+            let _ = header_tx.send(bed_reader.num_meta_columns());
         }
+
+        let work_item = WorkItem {
+            seq_id: global_seq_id,
+            regions: chunk,
+        };
+
+        if work_tx.send(work_item).is_err() {
+            break;
+        }
+        global_seq_id += 1;
     }
-    
+
     // If loop finished and global_seq_id is 0, file was empty.
     if global_seq_id == 0 {
         let _ = header_tx.send(0);
@@ -556,7 +567,14 @@ fn worker_loop(
 
         // Time the matching work
         let match_start = Instant::now();
-        let results = process_work_item(&work_item, &gtf, &config, &mut last_chrom, &mut last_start, &mut last_index);
+        let results = process_work_item(
+            &work_item,
+            &gtf,
+            &config,
+            &mut last_chrom,
+            &mut last_start,
+            &mut last_index,
+        );
         let match_elapsed = match_start.elapsed();
         metrics.add_worker_matching(match_elapsed.as_nanos() as u64);
         metrics.add_regions_processed(num_regions);
@@ -591,45 +609,44 @@ fn process_work_item(
 
     for region in &work_item.regions {
         if let Some(genes) = gtf.genes_by_chrom.get(&region.chrom) {
-             let max_len = *gtf.max_lengths.get(&region.chrom).unwrap_or(&0);
-             
-             let max_lookback = max_len + config.max_lookback_distance();
-             let search_start = region.start.saturating_sub(max_lookback);
-             
-             let start_index;
-             if *last_chrom == region.chrom && region.start >= *last_start {
-                 let mut idx = *last_index;
-                 while idx < genes.len() && genes[idx].end < search_start {
-                     idx += 1;
-                 }
-                 start_index = idx;
-             } else {
-                 start_index = find_search_start_index(genes, search_start);
-             }
-             
-             *last_chrom = region.chrom.clone();
-             *last_start = region.start;
-             *last_index = start_index;
-             
-             let candidates = match_region_to_genes(region, genes, config, start_index);
-             let processed = process_candidates_for_output(candidates, config);
-             results.push((region.clone(), processed));
+            let max_len = *gtf.max_lengths.get(&region.chrom).unwrap_or(&0);
+
+            let max_lookback = max_len + config.max_lookback_distance();
+            let search_start = region.start.saturating_sub(max_lookback);
+
+            let start_index = if *last_chrom == region.chrom && region.start >= *last_start {
+                let mut idx = *last_index;
+                while idx < genes.len() && genes[idx].end < search_start {
+                    idx += 1;
+                }
+                idx
+            } else {
+                find_search_start_index(genes, search_start)
+            };
+
+            *last_chrom = region.chrom.clone();
+            *last_start = region.start;
+            *last_index = start_index;
+
+            let candidates = match_region_to_genes(region, genes, config, start_index);
+            let processed = process_candidates_for_output(candidates, config);
+            results.push((region.clone(), processed));
         } else {
-             // Chromosome not found, but we must record it in output as processed (with empty candidates) 
-             // wait, match_region_to_genes returns Vec<Candidate>.
-             // If no genes, results is empty.
-             // But original code: "If the current gene also covers the region..."
-             // If no genes for chrom, we skip?
-             // run_sequential (original) printd "Warning: {} not found" and skipped.
-             // We should maintain parity.
-             // If skipping, we don't push to results?
-             // But we need to maintain order?
-             // Actually, if a region has no matches, it produces no output lines. 
-             // So skipping here is fine.
-             *last_chrom = region.chrom.clone();
+            // Chromosome not found, but we must record it in output as processed (with empty candidates)
+            // wait, match_region_to_genes returns Vec<Candidate>.
+            // If no genes, results is empty.
+            // But original code: "If the current gene also covers the region..."
+            // If no genes for chrom, we skip?
+            // run_sequential (original) printd "Warning: {} not found" and skipped.
+            // We should maintain parity.
+            // If skipping, we don't push to results?
+            // But we need to maintain order?
+            // Actually, if a region has no matches, it produces no output lines.
+            // So skipping here is fine.
+            *last_chrom = region.chrom.clone();
         }
     }
-    
+
     results
 }
 

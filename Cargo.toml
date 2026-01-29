@@ -5,6 +5,7 @@ edition = "2021"
 authors = ["rgmatch-rs authors"]
 description = "Genomic region-to-gene matching tool"
 license = "MIT"
+repository = "https://github.com/tianyuan/rgmatch-rs"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }

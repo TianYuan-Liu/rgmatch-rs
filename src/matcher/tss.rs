@@ -111,7 +111,8 @@ pub fn check_tss(
                 results.push(("PROMOTER".to_string(), pctg_dhs_promoter, pctg_promoter));
 
                 let upstream_overlap =
-                    (exon_start - tss_distance as i64 - promoter_distance as i64) - actual_dhs_start;
+                    (exon_start - tss_distance as i64 - promoter_distance as i64)
+                        - actual_dhs_start;
                 let pctg_dhs_upstream = (upstream_overlap as f64 / dhs_length_f) * 100.0;
                 results.push(("UPSTREAM".to_string(), pctg_dhs_upstream, -1.0));
             }
@@ -163,7 +164,11 @@ mod tests {
         };
 
         let res = check_tss(1800, 1810, &exon, 200.0, 1300.0);
-        assert!(res.iter().any(|(tag, _, _)| tag == "TSS"), "1800 should be TSS: {:?}", res);
+        assert!(
+            res.iter().any(|(tag, _, _)| tag == "TSS"),
+            "1800 should be TSS: {:?}",
+            res
+        );
 
         // Case 2: Just outside TSS boundary -> [1799, 1810]
         let res = check_tss(1799, 1810, &exon, 200.0, 1300.0);

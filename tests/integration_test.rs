@@ -8,7 +8,10 @@ use tempfile::NamedTempFile;
 ///
 /// This compares the output of rgmatch at the specified report level
 /// against a pre-generated golden output file.
-fn run_golden_test(report_level: &str, golden_filename: &str) -> Result<(), Box<dyn std::error::Error>> {
+fn run_golden_test(
+    report_level: &str,
+    golden_filename: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
     let cargo_manifest_dir = env!("CARGO_MANIFEST_DIR");
     let base_dir = Path::new(cargo_manifest_dir);
     let data_dir = base_dir.join("tests").join("data");

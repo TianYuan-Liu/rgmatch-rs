@@ -875,45 +875,43 @@ pub fn match_region_to_genes(
                 // Case 6: Exon totally after the region
                 //                       <----------------->
                 //   |---------|
-                else if exon.start > end {
-                    if is_first_exon {
-                        let dist_tmp = exon.start - pm;
+                else if exon.start > end && is_first_exon {
+                    let dist_tmp = exon.start - pm;
 
-                        if gene.strand == Strand::Negative && dist_tmp < down {
-                            down = dist_tmp;
-                            exon_down = Some(Candidate::new(
-                                exon.start,
-                                exon.end,
-                                gene.strand,
-                                exon_number.clone(),
-                                Area::Downstream,
-                                transcript.transcript_id.clone(),
-                                gene.gene_id.clone(),
-                                down,
-                                100.0,
-                                -1.0,
-                                tss_distance,
-                            ));
-                        } else if gene.strand == Strand::Positive && dist_tmp < upst {
-                            upst = dist_tmp;
-                            exon_up = Some(Candidate::new(
-                                exon.start,
-                                exon.end,
-                                gene.strand,
-                                exon_number.clone(),
-                                Area::Upstream,
-                                transcript.transcript_id.clone(),
-                                gene.gene_id.clone(),
-                                upst,
-                                100.0,
-                                -1.0,
-                                tss_distance,
-                            ));
-                        }
+                    if gene.strand == Strand::Negative && dist_tmp < down {
+                        down = dist_tmp;
+                        exon_down = Some(Candidate::new(
+                            exon.start,
+                            exon.end,
+                            gene.strand,
+                            exon_number.clone(),
+                            Area::Downstream,
+                            transcript.transcript_id.clone(),
+                            gene.gene_id.clone(),
+                            down,
+                            100.0,
+                            -1.0,
+                            tss_distance,
+                        ));
+                    } else if gene.strand == Strand::Positive && dist_tmp < upst {
+                        upst = dist_tmp;
+                        exon_up = Some(Candidate::new(
+                            exon.start,
+                            exon.end,
+                            gene.strand,
+                            exon_number.clone(),
+                            Area::Upstream,
+                            transcript.transcript_id.clone(),
+                            gene.gene_id.clone(),
+                            upst,
+                            100.0,
+                            -1.0,
+                            tss_distance,
+                        ));
+                    }
 
-                        if down <= dist_tmp && upst <= dist_tmp {
-                            break;
-                        }
+                    if down <= dist_tmp && upst <= dist_tmp {
+                        break;
                     }
                 }
             }
@@ -921,61 +919,59 @@ pub fn match_region_to_genes(
     }
 
     // Report closest downstream/upstream if applicable
-    if (down < upst || down == upst) && exon_down.is_some() {
-        let exon_down_ref = exon_down.as_ref().unwrap();
-        if exon_down_ref.distance <= config.distance {
+    if let Some(exon_down_val) = exon_down {
+        if down <= upst && exon_down_val.distance <= config.distance {
             if config.tts > 0.0 {
                 let exon_info = TtsExonInfo {
-                    start: exon_down_ref.start,
-                    end: exon_down_ref.end,
-                    strand: exon_down_ref.strand,
-                    distance: exon_down_ref.distance,
+                    start: exon_down_val.start,
+                    end: exon_down_val.end,
+                    strand: exon_down_val.strand,
+                    distance: exon_down_val.distance,
                 };
                 for (tag, pctg_dhs, pctg_a) in check_tts(start, end, &exon_info, config.tts) {
                     final_output.push(Candidate::new(
-                        exon_down_ref.start,
-                        exon_down_ref.end,
-                        exon_down_ref.strand,
-                        exon_down_ref.exon_number.clone(),
+                        exon_down_val.start,
+                        exon_down_val.end,
+                        exon_down_val.strand,
+                        exon_down_val.exon_number.clone(),
                         tag.parse().unwrap_or(Area::Downstream),
-                        exon_down_ref.transcript.clone(),
-                        exon_down_ref.gene.clone(),
-                        exon_down_ref.distance,
+                        exon_down_val.transcript.clone(),
+                        exon_down_val.gene.clone(),
+                        exon_down_val.distance,
                         pctg_dhs,
                         pctg_a,
-                        exon_down_ref.tss_distance,
+                        exon_down_val.tss_distance,
                     ));
                 }
             } else {
-                final_output.push(exon_down.unwrap());
+                final_output.push(exon_down_val);
             }
         }
     }
 
-    if (upst < down || upst == down) && exon_up.is_some() {
-        let exon_up_ref = exon_up.as_ref().unwrap();
-        if exon_up_ref.distance <= config.distance {
+    if let Some(exon_up_val) = exon_up {
+        if upst <= down && exon_up_val.distance <= config.distance {
             let exon_info = TssExonInfo {
-                start: exon_up_ref.start,
-                end: exon_up_ref.end,
-                strand: exon_up_ref.strand,
-                distance: exon_up_ref.distance,
+                start: exon_up_val.start,
+                end: exon_up_val.end,
+                strand: exon_up_val.strand,
+                distance: exon_up_val.distance,
             };
             for (tag, pctg_dhs, pctg_a) in
                 check_tss(start, end, &exon_info, config.tss, config.promoter)
             {
                 final_output.push(Candidate::new(
-                    exon_up_ref.start,
-                    exon_up_ref.end,
-                    exon_up_ref.strand,
-                    exon_up_ref.exon_number.clone(),
+                    exon_up_val.start,
+                    exon_up_val.end,
+                    exon_up_val.strand,
+                    exon_up_val.exon_number.clone(),
                     tag.parse().unwrap_or(Area::Upstream),
-                    exon_up_ref.transcript.clone(),
-                    exon_up_ref.gene.clone(),
-                    exon_up_ref.distance,
+                    exon_up_val.transcript.clone(),
+                    exon_up_val.gene.clone(),
+                    exon_up_val.distance,
                     pctg_dhs,
                     pctg_a,
-                    exon_up_ref.tss_distance,
+                    exon_up_val.tss_distance,
                 ));
             }
         }

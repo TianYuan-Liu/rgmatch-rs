@@ -729,7 +729,7 @@ mod test_types_strand {
     fn test_strand_clone_copy() {
         let s1 = Strand::Positive;
         let s2 = s1; // Copy
-        let s3 = s1.clone();
+        let s3 = s1; // Copy trait - no need to call clone()
         assert_eq!(s1, s2);
         assert_eq!(s1, s3);
     }
@@ -801,7 +801,7 @@ mod test_types_area {
         assert!(Area::Tss < Area::FirstExon);
         assert!(Area::FirstExon < Area::Promoter);
 
-        let mut areas = vec![Area::Downstream, Area::Tss, Area::Intron, Area::FirstExon];
+        let mut areas = [Area::Downstream, Area::Tss, Area::Intron, Area::FirstExon];
         areas.sort();
         assert_eq!(areas[0], Area::Tss);
     }
@@ -1162,7 +1162,7 @@ mod test_types_report_level {
     fn test_report_level_clone_copy() {
         let r1 = ReportLevel::Gene;
         let r2 = r1; // Copy
-        let r3 = r1.clone();
+        let r3 = r1; // Copy trait - no need to call clone()
         assert_eq!(r1, r2);
         assert_eq!(r1, r3);
     }
@@ -1347,8 +1347,10 @@ mod test_overlap_functions {
 
     #[test]
     fn test_process_candidates_exon_level() {
-        let mut config = Config::default();
-        config.level = ReportLevel::Exon;
+        let config = Config {
+            level: ReportLevel::Exon,
+            ..Default::default()
+        };
 
         let c1 = make_candidate(Area::Tss, 100.0, 100.0, "T1", "G1", "1");
         let c2 = make_candidate(Area::Intron, 80.0, 80.0, "T1", "G1", "2");
@@ -1362,8 +1364,10 @@ mod test_overlap_functions {
 
     #[test]
     fn test_process_candidates_transcript_level() {
-        let mut config = Config::default();
-        config.level = ReportLevel::Transcript;
+        let config = Config {
+            level: ReportLevel::Transcript,
+            ..Default::default()
+        };
 
         let c1 = make_candidate(Area::Tss, 100.0, 100.0, "T1", "G1", "1");
         let c2 = make_candidate(Area::Intron, 80.0, 80.0, "T1", "G1", "2");
@@ -1378,8 +1382,10 @@ mod test_overlap_functions {
 
     #[test]
     fn test_process_candidates_gene_level() {
-        let mut config = Config::default();
-        config.level = ReportLevel::Gene;
+        let config = Config {
+            level: ReportLevel::Gene,
+            ..Default::default()
+        };
 
         let c1 = make_candidate(Area::Tss, 100.0, 100.0, "T1", "G1", "1");
         let c2 = make_candidate(Area::Tss, 90.0, 90.0, "T2", "G1", "2");

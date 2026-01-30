@@ -1923,7 +1923,14 @@ mod test_parser_bed {
         let headers = get_bed_headers(6);
         assert_eq!(
             headers,
-            vec!["name", "score", "strand", "thickStart", "thickEnd", "itemRgb"]
+            vec![
+                "name",
+                "score",
+                "strand",
+                "thickStart",
+                "thickEnd",
+                "itemRgb"
+            ]
         );
     }
 
@@ -2377,11 +2384,7 @@ mod test_overlap_with_tts {
         // For negative strand, TTS is at gene start (1000)
         // Region at 800-850 is 150bp before start, should be in TTS zone
         let has_tts = candidates.iter().any(|c| c.area == Area::Tts);
-        assert!(
-            has_tts,
-            "Negative strand should have TTS: {:?}",
-            candidates
-        );
+        assert!(has_tts, "Negative strand should have TTS: {:?}", candidates);
     }
 
     #[test]
@@ -2482,7 +2485,11 @@ mod test_tss_edge_cases {
         let res = check_tss(5000, 9900, &exon, 200.0, 1300.0);
         let tags: Vec<&str> = res.iter().map(|(t, _, _)| t.as_str()).collect();
         // Should span multiple zones
-        assert!(tags.len() >= 2, "Large region should span zones: {:?}", tags);
+        assert!(
+            tags.len() >= 2,
+            "Large region should span zones: {:?}",
+            tags
+        );
     }
 
     #[test]

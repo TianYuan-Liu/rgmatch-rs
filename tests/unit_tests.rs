@@ -1898,6 +1898,744 @@ mod test_overlap_functions {
 // 10. Output Module Tests
 // -------------------------------------------------------------------------
 
+// -------------------------------------------------------------------------
+// 10. Parser BED Module Tests
+// -------------------------------------------------------------------------
+
+mod test_parser_bed {
+    use rgmatch::parser::bed::get_bed_headers;
+    use rgmatch::BedReader;
+    use rgmatch::Region;
+    use std::io::Write;
+    use tempfile::NamedTempFile;
+
+    #[test]
+    fn test_get_bed_headers_zero() {
+        let headers = get_bed_headers(0);
+        assert!(headers.is_empty());
+    }
+
+    #[test]
+    fn test_get_bed_headers_partial() {
+        let headers = get_bed_headers(3);
+        assert_eq!(headers.len(), 3);
+        assert_eq!(headers[0], "name");
+        assert_eq!(headers[1], "score");
+        assert_eq!(headers[2], "strand");
+    }
+
+    #[test]
+    fn test_get_bed_headers_full() {
+        let headers = get_bed_headers(9);
+        assert_eq!(headers.len(), 9);
+        assert_eq!(headers[8], "blockStarts");
+    }
+
+    #[test]
+    fn test_get_bed_headers_exceeds_max() {
+        // Request more than available, should cap at 9
+        let headers = get_bed_headers(20);
+        assert_eq!(headers.len(), 9);
+    }
+
+    #[test]
+    fn test_bed_reader_multiple_chroms() {
+        let mut temp_file = NamedTempFile::new().unwrap();
+        writeln!(temp_file, "chr1\t100\t200").unwrap();
+        writeln!(temp_file, "chr2\t300\t400").unwrap();
+        writeln!(temp_file, "chr3\t500\t600").unwrap();
+        writeln!(temp_file, "chr1\t700\t800").unwrap();
+        temp_file.flush().unwrap();
+
+        let mut reader = BedReader::new(temp_file.path()).unwrap();
+        let chunk = reader.read_chunk(100).unwrap().unwrap();
+
+        assert_eq!(chunk.len(), 4);
+        assert_eq!(chunk[0].chrom, "chr1");
+        assert_eq!(chunk[1].chrom, "chr2");
+        assert_eq!(chunk[2].chrom, "chr3");
+        assert_eq!(chunk[3].chrom, "chr1");
+    }
+
+    #[test]
+    fn test_bed_reader_max_metadata_columns() {
+        let mut temp_file = NamedTempFile::new().unwrap();
+        // 12-column BED (9 metadata columns)
+        writeln!(
+            temp_file,
+            "chr1\t100\t200\tname\t500\t+\t100\t200\t0,0,0\t2\t50,50\t0,100"
+        )
+        .unwrap();
+        temp_file.flush().unwrap();
+
+        let mut reader = BedReader::new(temp_file.path()).unwrap();
+        let chunk = reader.read_chunk(100).unwrap().unwrap();
+
+        assert_eq!(reader.num_meta_columns(), 9);
+        assert_eq!(chunk[0].metadata.len(), 9);
+        assert_eq!(chunk[0].metadata[0], "name");
+        assert_eq!(chunk[0].metadata[8], "0,100");
+    }
+
+    #[test]
+    fn test_bed_reader_skip_malformed_lines() {
+        let mut temp_file = NamedTempFile::new().unwrap();
+        writeln!(temp_file, "chr1\t100").unwrap(); // Only 2 columns
+        writeln!(temp_file, "chr1\t100\t200").unwrap(); // Valid
+        temp_file.flush().unwrap();
+
+        let mut reader = BedReader::new(temp_file.path()).unwrap();
+        let chunk = reader.read_chunk(100).unwrap().unwrap();
+
+        assert_eq!(chunk.len(), 1);
+        assert_eq!(chunk[0].start, 100);
+        assert_eq!(chunk[0].end, 200);
+    }
+
+    #[test]
+    fn test_bed_reader_empty_file() {
+        let temp_file = NamedTempFile::new().unwrap();
+        // Empty file - nothing written
+
+        let mut reader = BedReader::new(temp_file.path()).unwrap();
+        let chunk = reader.read_chunk(100).unwrap();
+
+        assert!(chunk.is_none());
+    }
+
+    #[test]
+    fn test_bed_reader_only_empty_lines() {
+        let mut temp_file = NamedTempFile::new().unwrap();
+        writeln!(temp_file).unwrap();
+        writeln!(temp_file).unwrap();
+        writeln!(temp_file).unwrap();
+        temp_file.flush().unwrap();
+
+        let mut reader = BedReader::new(temp_file.path()).unwrap();
+        let chunk = reader.read_chunk(100).unwrap();
+
+        assert!(chunk.is_none());
+    }
+
+    #[test]
+    fn test_bed_reader_varying_metadata() {
+        let mut temp_file = NamedTempFile::new().unwrap();
+        writeln!(temp_file, "chr1\t100\t200\tname1").unwrap();
+        writeln!(temp_file, "chr1\t300\t400\tname2\t500").unwrap();
+        writeln!(temp_file, "chr1\t500\t600\tname3\t600\t+").unwrap();
+        temp_file.flush().unwrap();
+
+        let mut reader = BedReader::new(temp_file.path()).unwrap();
+        let _chunk = reader.read_chunk(100).unwrap().unwrap();
+
+        // num_meta_columns should track the maximum (3)
+        assert_eq!(reader.num_meta_columns(), 3);
+    }
+
+    #[test]
+    fn test_bed_reader_scientific_notation_rejected() {
+        let mut temp_file = NamedTempFile::new().unwrap();
+        writeln!(temp_file, "chr1\t1e3\t2e3").unwrap();
+        temp_file.flush().unwrap();
+
+        let mut reader = BedReader::new(temp_file.path()).unwrap();
+        let chunk = reader.read_chunk(100).unwrap();
+
+        // Should skip the line (can't parse 1e3 as i64)
+        assert!(chunk.is_none());
+    }
+
+    #[test]
+    fn test_bed_reader_negative_coords_accepted() {
+        let mut temp_file = NamedTempFile::new().unwrap();
+        writeln!(temp_file, "chr1\t-100\t200").unwrap();
+        temp_file.flush().unwrap();
+
+        let mut reader = BedReader::new(temp_file.path()).unwrap();
+        let chunk = reader.read_chunk(100).unwrap().unwrap();
+
+        assert_eq!(chunk[0].start, -100);
+    }
+
+    #[test]
+    fn test_bed_reader_large_coordinates() {
+        let mut temp_file = NamedTempFile::new().unwrap();
+        writeln!(temp_file, "chr1\t100000000\t200000000").unwrap();
+        temp_file.flush().unwrap();
+
+        let mut reader = BedReader::new(temp_file.path()).unwrap();
+        let chunk = reader.read_chunk(100).unwrap().unwrap();
+
+        assert_eq!(chunk[0].start, 100000000);
+        assert_eq!(chunk[0].end, 200000000);
+    }
+
+    #[test]
+    fn test_bed_reader_chunk_boundary() {
+        let mut temp_file = NamedTempFile::new().unwrap();
+        for i in 0..10 {
+            writeln!(temp_file, "chr1\t{}\t{}", i * 100, i * 100 + 50).unwrap();
+        }
+        temp_file.flush().unwrap();
+
+        let mut reader = BedReader::new(temp_file.path()).unwrap();
+
+        // Read in chunks of 3
+        let chunk1 = reader.read_chunk(3).unwrap().unwrap();
+        assert_eq!(chunk1.len(), 3);
+
+        let chunk2 = reader.read_chunk(3).unwrap().unwrap();
+        assert_eq!(chunk2.len(), 3);
+
+        let chunk3 = reader.read_chunk(3).unwrap().unwrap();
+        assert_eq!(chunk3.len(), 3);
+
+        let chunk4 = reader.read_chunk(3).unwrap().unwrap();
+        assert_eq!(chunk4.len(), 1); // Last chunk has only 1 region
+
+        let chunk5 = reader.read_chunk(3).unwrap();
+        assert!(chunk5.is_none()); // EOF
+    }
+
+    #[test]
+    fn test_region_methods() {
+        let region = Region::new("chr1".to_string(), 100, 200, vec!["test".to_string()]);
+
+        assert_eq!(region.length(), 101);
+        assert_eq!(region.midpoint(), 150);
+        assert_eq!(region.id(), "chr1_100_200");
+    }
+}
+
+// -------------------------------------------------------------------------
+// 11. Parser GTF Module Tests
+// -------------------------------------------------------------------------
+
+mod test_parser_gtf {
+    use rgmatch::parser::gtf::parse_gtf;
+    use rgmatch::types::Strand;
+    use std::io::Write;
+    use tempfile::NamedTempFile;
+
+    #[test]
+    fn test_parse_gtf_skip_comments() {
+        let mut temp_file = NamedTempFile::new().unwrap();
+        writeln!(temp_file, "# This is a comment").unwrap();
+        writeln!(temp_file, "##description: test GTF").unwrap();
+        writeln!(
+            temp_file,
+            "chr1\tTEST\texon\t1000\t1200\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T1\";"
+        )
+        .unwrap();
+        temp_file.flush().unwrap();
+
+        let result = parse_gtf(temp_file.path(), "gene_id", "transcript_id").unwrap();
+
+        assert!(result.genes_by_chrom.contains_key("chr1"));
+        assert_eq!(result.genes_by_chrom["chr1"].len(), 1);
+    }
+
+    #[test]
+    fn test_parse_gtf_multiple_chromosomes() {
+        let mut temp_file = NamedTempFile::new().unwrap();
+        writeln!(
+            temp_file,
+            "chr1\tTEST\texon\t1000\t1200\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T1\";"
+        )
+        .unwrap();
+        writeln!(
+            temp_file,
+            "chr2\tTEST\texon\t2000\t2200\t.\t-\t.\tgene_id \"G2\"; transcript_id \"T2\";"
+        )
+        .unwrap();
+        writeln!(
+            temp_file,
+            "chrX\tTEST\texon\t3000\t3200\t.\t+\t.\tgene_id \"G3\"; transcript_id \"T3\";"
+        )
+        .unwrap();
+        temp_file.flush().unwrap();
+
+        let result = parse_gtf(temp_file.path(), "gene_id", "transcript_id").unwrap();
+
+        assert_eq!(result.genes_by_chrom.len(), 3);
+        assert!(result.genes_by_chrom.contains_key("chr1"));
+        assert!(result.genes_by_chrom.contains_key("chr2"));
+        assert!(result.genes_by_chrom.contains_key("chrX"));
+    }
+
+    #[test]
+    fn test_parse_gtf_custom_id_tags() {
+        let mut temp_file = NamedTempFile::new().unwrap();
+        writeln!(
+            temp_file,
+            "chr1\tTEST\texon\t1000\t1200\t.\t+\t.\tmy_gene \"G1\"; my_trans \"T1\";"
+        )
+        .unwrap();
+        temp_file.flush().unwrap();
+
+        let result = parse_gtf(temp_file.path(), "my_gene", "my_trans").unwrap();
+
+        assert!(result.genes_by_chrom.contains_key("chr1"));
+        assert_eq!(result.genes_by_chrom["chr1"][0].gene_id, "G1");
+        assert_eq!(
+            result.genes_by_chrom["chr1"][0].transcripts[0].transcript_id,
+            "T1"
+        );
+    }
+
+    #[test]
+    fn test_parse_gtf_exon_only_no_gene_entry() {
+        let mut temp_file = NamedTempFile::new().unwrap();
+        writeln!(
+            temp_file,
+            "chr1\tTEST\texon\t1000\t1200\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T1\";"
+        )
+        .unwrap();
+        writeln!(
+            temp_file,
+            "chr1\tTEST\texon\t1500\t1700\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T1\";"
+        )
+        .unwrap();
+        temp_file.flush().unwrap();
+
+        let result = parse_gtf(temp_file.path(), "gene_id", "transcript_id").unwrap();
+
+        let gene = &result.genes_by_chrom["chr1"][0];
+        // Gene size should be calculated from exons
+        assert_eq!(gene.start, 1000);
+        assert_eq!(gene.end, 1700);
+
+        // Transcript size should also be calculated
+        let transcript = &gene.transcripts[0];
+        assert_eq!(transcript.start, 1000);
+        assert_eq!(transcript.end, 1700);
+    }
+
+    #[test]
+    fn test_parse_gtf_with_gene_and_transcript_entries() {
+        let mut temp_file = NamedTempFile::new().unwrap();
+        writeln!(
+            temp_file,
+            "chr1\tTEST\tgene\t1000\t2000\t.\t+\t.\tgene_id \"G1\";"
+        )
+        .unwrap();
+        writeln!(
+            temp_file,
+            "chr1\tTEST\ttranscript\t1000\t2000\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T1\";"
+        )
+        .unwrap();
+        writeln!(
+            temp_file,
+            "chr1\tTEST\texon\t1000\t1200\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T1\";"
+        )
+        .unwrap();
+        writeln!(
+            temp_file,
+            "chr1\tTEST\texon\t1500\t2000\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T1\";"
+        )
+        .unwrap();
+        temp_file.flush().unwrap();
+
+        let result = parse_gtf(temp_file.path(), "gene_id", "transcript_id").unwrap();
+
+        let gene = &result.genes_by_chrom["chr1"][0];
+        // Gene boundaries from gene entry
+        assert_eq!(gene.start, 1000);
+        assert_eq!(gene.end, 2000);
+
+        // Transcript boundaries from transcript entry
+        let transcript = &gene.transcripts[0];
+        assert_eq!(transcript.start, 1000);
+        assert_eq!(transcript.end, 2000);
+    }
+
+    #[test]
+    fn test_parse_gtf_multiple_transcripts_per_gene() {
+        let mut temp_file = NamedTempFile::new().unwrap();
+        writeln!(
+            temp_file,
+            "chr1\tTEST\texon\t1000\t1200\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T1\";"
+        )
+        .unwrap();
+        writeln!(
+            temp_file,
+            "chr1\tTEST\texon\t1500\t1700\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T1\";"
+        )
+        .unwrap();
+        writeln!(
+            temp_file,
+            "chr1\tTEST\texon\t1100\t1300\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T2\";"
+        )
+        .unwrap();
+        writeln!(
+            temp_file,
+            "chr1\tTEST\texon\t1600\t1800\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T2\";"
+        )
+        .unwrap();
+        temp_file.flush().unwrap();
+
+        let result = parse_gtf(temp_file.path(), "gene_id", "transcript_id").unwrap();
+
+        let gene = &result.genes_by_chrom["chr1"][0];
+        assert_eq!(gene.transcripts.len(), 2);
+    }
+
+    #[test]
+    fn test_parse_gtf_skip_invalid_strand() {
+        let mut temp_file = NamedTempFile::new().unwrap();
+        // Invalid strand '.' should be skipped
+        writeln!(
+            temp_file,
+            "chr1\tTEST\texon\t1000\t1200\t.\t.\t.\tgene_id \"G1\"; transcript_id \"T1\";"
+        )
+        .unwrap();
+        writeln!(
+            temp_file,
+            "chr1\tTEST\texon\t1500\t1700\t.\t+\t.\tgene_id \"G2\"; transcript_id \"T2\";"
+        )
+        .unwrap();
+        temp_file.flush().unwrap();
+
+        let result = parse_gtf(temp_file.path(), "gene_id", "transcript_id").unwrap();
+
+        // Only G2 should be parsed (G1 has invalid strand)
+        assert_eq!(result.genes_by_chrom["chr1"].len(), 1);
+        assert_eq!(result.genes_by_chrom["chr1"][0].gene_id, "G2");
+    }
+
+    #[test]
+    fn test_parse_gtf_negative_strand_exon_numbering() {
+        let mut temp_file = NamedTempFile::new().unwrap();
+        writeln!(
+            temp_file,
+            "chr1\tTEST\texon\t1000\t1200\t.\t-\t.\tgene_id \"G1\"; transcript_id \"T1\";"
+        )
+        .unwrap();
+        writeln!(
+            temp_file,
+            "chr1\tTEST\texon\t1500\t1700\t.\t-\t.\tgene_id \"G1\"; transcript_id \"T1\";"
+        )
+        .unwrap();
+        writeln!(
+            temp_file,
+            "chr1\tTEST\texon\t2000\t2200\t.\t-\t.\tgene_id \"G1\"; transcript_id \"T1\";"
+        )
+        .unwrap();
+        temp_file.flush().unwrap();
+
+        let result = parse_gtf(temp_file.path(), "gene_id", "transcript_id").unwrap();
+
+        let transcript = &result.genes_by_chrom["chr1"][0].transcripts[0];
+        // For negative strand: first exon (genomically) gets highest number
+        assert_eq!(transcript.exons[0].exon_number, Some("3".to_string())); // 1000-1200
+        assert_eq!(transcript.exons[1].exon_number, Some("2".to_string())); // 1500-1700
+        assert_eq!(transcript.exons[2].exon_number, Some("1".to_string())); // 2000-2200
+    }
+
+    #[test]
+    fn test_parse_gtf_max_lengths() {
+        let mut temp_file = NamedTempFile::new().unwrap();
+        writeln!(
+            temp_file,
+            "chr1\tTEST\texon\t1000\t2000\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T1\";"
+        )
+        .unwrap();
+        writeln!(
+            temp_file,
+            "chr1\tTEST\texon\t5000\t8000\t.\t+\t.\tgene_id \"G2\"; transcript_id \"T2\";"
+        )
+        .unwrap();
+        temp_file.flush().unwrap();
+
+        let result = parse_gtf(temp_file.path(), "gene_id", "transcript_id").unwrap();
+
+        // Max length should be G2's length (8000 - 5000 = 3000)
+        assert_eq!(result.max_lengths["chr1"], 3000);
+    }
+
+    #[test]
+    fn test_parse_gtf_empty_file() {
+        let temp_file = NamedTempFile::new().unwrap();
+        // Empty file
+
+        let result = parse_gtf(temp_file.path(), "gene_id", "transcript_id").unwrap();
+
+        assert!(result.genes_by_chrom.is_empty());
+    }
+
+    #[test]
+    fn test_parse_gtf_only_comments() {
+        let mut temp_file = NamedTempFile::new().unwrap();
+        writeln!(temp_file, "# Comment 1").unwrap();
+        writeln!(temp_file, "## Comment 2").unwrap();
+        temp_file.flush().unwrap();
+
+        let result = parse_gtf(temp_file.path(), "gene_id", "transcript_id").unwrap();
+
+        assert!(result.genes_by_chrom.is_empty());
+    }
+
+    #[test]
+    fn test_parse_gtf_multiple_genes_same_chrom() {
+        let mut temp_file = NamedTempFile::new().unwrap();
+        writeln!(
+            temp_file,
+            "chr1\tTEST\texon\t1000\t1200\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T1\";"
+        )
+        .unwrap();
+        writeln!(
+            temp_file,
+            "chr1\tTEST\texon\t5000\t5200\t.\t-\t.\tgene_id \"G2\"; transcript_id \"T2\";"
+        )
+        .unwrap();
+        writeln!(
+            temp_file,
+            "chr1\tTEST\texon\t10000\t10200\t.\t+\t.\tgene_id \"G3\"; transcript_id \"T3\";"
+        )
+        .unwrap();
+        temp_file.flush().unwrap();
+
+        let result = parse_gtf(temp_file.path(), "gene_id", "transcript_id").unwrap();
+
+        assert_eq!(result.genes_by_chrom["chr1"].len(), 3);
+    }
+
+    #[test]
+    fn test_parse_gtf_gene_strand_preserved() {
+        let mut temp_file = NamedTempFile::new().unwrap();
+        writeln!(
+            temp_file,
+            "chr1\tTEST\texon\t1000\t1200\t.\t-\t.\tgene_id \"G1\"; transcript_id \"T1\";"
+        )
+        .unwrap();
+        temp_file.flush().unwrap();
+
+        let result = parse_gtf(temp_file.path(), "gene_id", "transcript_id").unwrap();
+
+        assert_eq!(result.genes_by_chrom["chr1"][0].strand, Strand::Negative);
+    }
+}
+
+// -------------------------------------------------------------------------
+// 12. Error Type Display Tests
+// -------------------------------------------------------------------------
+
+mod test_error_types {
+    use rgmatch::types::{Area, ReportLevel, Strand};
+    use std::error::Error;
+    use std::str::FromStr;
+
+    #[test]
+    fn test_parse_strand_error_display() {
+        let err = Strand::from_str("invalid").unwrap_err();
+        assert_eq!(format!("{}", err), "invalid strand: expected '+' or '-'");
+    }
+
+    #[test]
+    fn test_parse_strand_error_is_error_trait() {
+        let err = Strand::from_str("invalid").unwrap_err();
+        // Verify it implements std::error::Error
+        let _: &dyn Error = &err;
+    }
+
+    #[test]
+    fn test_parse_area_error_display() {
+        let err = Area::from_str("invalid").unwrap_err();
+        assert_eq!(format!("{}", err), "invalid area type");
+    }
+
+    #[test]
+    fn test_parse_area_error_is_error_trait() {
+        let err = Area::from_str("invalid").unwrap_err();
+        let _: &dyn Error = &err;
+    }
+
+    #[test]
+    fn test_parse_report_level_error_display() {
+        let err = ReportLevel::from_str("invalid").unwrap_err();
+        assert_eq!(
+            format!("{}", err),
+            "invalid report level: expected 'exon', 'transcript', or 'gene'"
+        );
+    }
+
+    #[test]
+    fn test_parse_report_level_error_is_error_trait() {
+        let err = ReportLevel::from_str("invalid").unwrap_err();
+        let _: &dyn Error = &err;
+    }
+
+    #[test]
+    fn test_parse_strand_error_debug() {
+        let err = Strand::from_str("invalid").unwrap_err();
+        assert_eq!(format!("{:?}", err), "ParseStrandError");
+    }
+
+    #[test]
+    fn test_parse_area_error_debug() {
+        let err = Area::from_str("invalid").unwrap_err();
+        assert_eq!(format!("{:?}", err), "ParseAreaError");
+    }
+
+    #[test]
+    fn test_parse_report_level_error_debug() {
+        let err = ReportLevel::from_str("invalid").unwrap_err();
+        assert_eq!(format!("{:?}", err), "ParseReportLevelError");
+    }
+}
+
+// -------------------------------------------------------------------------
+// 13. Config Additional Tests
+// -------------------------------------------------------------------------
+
+mod test_config_extended {
+    use rgmatch::config::Config;
+    use rgmatch::types::{Area, ReportLevel};
+
+    #[test]
+    fn test_config_default_tags() {
+        let config = Config::default();
+        assert_eq!(config.gene_id_tag, "gene_id");
+        assert_eq!(config.transcript_id_tag, "transcript_id");
+    }
+
+    #[test]
+    fn test_config_custom_tags() {
+        let mut config = Config::new();
+        config.gene_id_tag = "my_gene".to_string();
+        config.transcript_id_tag = "my_transcript".to_string();
+
+        assert_eq!(config.gene_id_tag, "my_gene");
+        assert_eq!(config.transcript_id_tag, "my_transcript");
+    }
+
+    #[test]
+    fn test_config_all_levels() {
+        let mut config = Config::new();
+
+        config.level = ReportLevel::Exon;
+        assert_eq!(config.level, ReportLevel::Exon);
+
+        config.level = ReportLevel::Transcript;
+        assert_eq!(config.level, ReportLevel::Transcript);
+
+        config.level = ReportLevel::Gene;
+        assert_eq!(config.level, ReportLevel::Gene);
+    }
+
+    #[test]
+    fn test_config_set_distance_kb_large() {
+        let mut config = Config::new();
+        config.set_distance_kb(1000); // 1000 kb = 1 Mb
+        assert_eq!(config.distance, 1_000_000);
+    }
+
+    #[test]
+    fn test_config_max_lookback_with_large_tss() {
+        let mut config = Config::new();
+        config.tss = 50000.0; // 50kb TSS
+        config.distance = 10000; // 10kb distance
+
+        // max_lookback should use tss since it's larger
+        assert_eq!(config.max_lookback_distance(), 50000);
+    }
+
+    #[test]
+    fn test_config_max_lookback_with_large_promoter() {
+        let mut config = Config::new();
+        config.promoter = 50000.0; // 50kb promoter
+        config.distance = 10000;
+
+        assert_eq!(config.max_lookback_distance(), 50000);
+    }
+
+    #[test]
+    fn test_config_max_lookback_with_large_tts() {
+        let mut config = Config::new();
+        config.tts = 50000.0; // 50kb TTS
+        config.distance = 10000;
+
+        assert_eq!(config.max_lookback_distance(), 50000);
+    }
+
+    #[test]
+    fn test_config_parse_rules_with_extra_duplicates() {
+        let mut config = Config::new();
+        // All 8 valid tags but some duplicated
+        let result = config.parse_rules(
+            "TSS,TSS,1st_EXON,1st_EXON,PROMOTER,TTS,INTRON,GENE_BODY,UPSTREAM,DOWNSTREAM",
+        );
+        // Should succeed since duplicates are filtered
+        assert!(result);
+        assert_eq!(config.rules.len(), 8);
+    }
+
+    #[test]
+    fn test_config_parse_rules_preserves_order() {
+        let mut config = Config::new();
+        let result =
+            config.parse_rules("DOWNSTREAM,UPSTREAM,GENE_BODY,INTRON,TTS,PROMOTER,1st_EXON,TSS");
+        assert!(result);
+
+        // Verify order is preserved
+        assert_eq!(config.rules[0], Area::Downstream);
+        assert_eq!(config.rules[1], Area::Upstream);
+        assert_eq!(config.rules[2], Area::GeneBody);
+        assert_eq!(config.rules[3], Area::Intron);
+        assert_eq!(config.rules[4], Area::Tts);
+        assert_eq!(config.rules[5], Area::Promoter);
+        assert_eq!(config.rules[6], Area::FirstExon);
+        assert_eq!(config.rules[7], Area::Tss);
+    }
+
+    #[test]
+    fn test_config_debug_output() {
+        let config = Config::default();
+        let debug_str = format!("{:?}", config);
+
+        // Verify debug output contains expected fields
+        assert!(debug_str.contains("rules"));
+        assert!(debug_str.contains("perc_area"));
+        assert!(debug_str.contains("perc_region"));
+        assert!(debug_str.contains("tss"));
+        assert!(debug_str.contains("tts"));
+        assert!(debug_str.contains("promoter"));
+        assert!(debug_str.contains("distance"));
+    }
+
+    #[test]
+    fn test_config_clone_independence() {
+        let config1 = Config::default();
+        let mut config2 = config1.clone();
+
+        config2.tss = 500.0;
+        config2.distance = 50000;
+
+        // Original should be unchanged
+        assert_eq!(config1.tss, 200.0);
+        assert_eq!(config1.distance, 10000);
+    }
+
+    #[test]
+    fn test_config_boundary_values() {
+        let mut config = Config::new();
+
+        // Test zero values
+        config.tss = 0.0;
+        config.tts = 0.0;
+        config.promoter = 0.0;
+        config.perc_area = 0.0;
+        config.perc_region = 0.0;
+
+        assert_eq!(config.tss, 0.0);
+        assert_eq!(config.max_lookback_distance(), 10000); // Falls back to distance
+    }
+}
+
+// -------------------------------------------------------------------------
+// 14. Output Module Tests
+// -------------------------------------------------------------------------
+
 mod test_output {
     use super::*;
     use rgmatch::Region;

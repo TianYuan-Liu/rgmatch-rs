@@ -1,84 +1,91 @@
 # Unit Test Coverage Task Notes
 
 ## Current Status
-Unit tests increased from 226 to 282 tests (56 new tests added this iteration).
-
-## Tests Added This Iteration (Iteration 9)
-
-### Gene Extended Tests (8 tests)
-- Empty transcripts handling
-- Mixed transcripts (some empty)
-- Multiple overlapping transcripts
-- calculate_size boundary behavior
-- Strand preservation
-- Debug trait
-
-### Region Extended Tests (9 tests)
-- Special chromosome names (chr1_random, chrUn_gl000220)
-- Empty chromosome
-- Negative coordinates
-- Zero-length regions
-- Inverted coordinates
-- Very large coordinates
-- Metadata with special characters
-- Unicode chromosome names
-
-### Exon Extended Tests (5 tests)
-- Exon with exon number
-- Large span length
-- Single base length
-- Negative coordinates
-- Debug trait
-
-### Overlap Complex Tests (7 tests)
-- Region spans entire gene
-- Exact exon match
-- Region between two genes
-- Multiple transcripts same gene
-- Gene-level merging
-- Empty input handling
-- Negative strand TSS calculation
-
-### Output Special Character Tests (7 tests)
-- Metadata with tabs
-- Metadata with newlines
-- Unicode metadata
-- Empty strings
-- Negative distances
-- All header columns
-- Tab separation verification
-
-### GTF Attribute Extended Tests (7 tests)
-- Semicolon in value
-- Spaces around quotes
-- Numeric values
-- Long values
-- Extra attributes
-- Key as prefix handling
-- Missing transcript_id
-
-### find_search_start_index Extended Tests (8 tests)
-- Exact match
-- Just before/after boundaries
-- Negative search value
-- Zero search value
-- Very large search value
-- Single gene cases
-- Duplicate start positions
-
-### Candidate Extended Tests (5 tests)
-- All area types
-- Negative percentages
-- Zero values
-- Large coordinates
-- Debug trait
+Unit tests increased from 282 to 362 tests (80 new tests added this iteration).
 
 ## Running Tests
 ```bash
-cargo test --test unit_tests  # Unit tests (282 tests)
+cargo test --test unit_tests  # Unit tests (362 tests)
 cargo test --lib              # Library tests (55 tests)
-cargo test                    # All tests (~337 total, excluding integration)
+cargo test                    # All tests (~417 total, excluding integration)
 ```
+
+## Tests Added This Iteration (Iteration 10)
+
+### match_regions_to_genes Extended Tests (8 tests)
+- Empty regions/genes handling
+- Multiple regions single gene
+- Region order preservation
+- last_index optimization
+- Large gene lengths
+- Negative strand genes
+- Multiple overlapping genes
+
+### process_candidates_for_output Gene Level Tests (7 tests)
+- Single gene single transcript
+- Multiple transcripts same area (merging)
+- Multiple transcripts different areas
+- Multiple genes
+- Empty candidates
+- Transcript filtering then gene selection
+- Merged exon numbers
+
+### Error Type Display Implementation Tests (9 tests)
+- ParseStrandError display message
+- ParseAreaError display message
+- ParseReportLevelError display message
+- std::error::Error trait verification
+- Clone/Eq trait verification
+
+### Overlap Module Edge Cases (12 tests)
+- Exon boundary start/end
+- Region in intron
+- Region spanning multiple introns
+- Single base exon
+- Upstream/downstream for positive/negative strand
+- TTS enabled scenarios
+- Many exons gene
+- Distance threshold edge cases
+
+### GTF extract_attribute Extended Tests (8 tests)
+- Attribute with equals sign
+- Numbers only values
+- Empty values
+- Values with dots/underscores/hyphens
+- Attribute order independence
+- No trailing semicolon
+
+### Config Extended Tests (10 tests)
+- new() equals default()
+- Clone trait
+- Debug trait
+- max_lookback_distance with tss/tts/promoter/distance dominance
+- parse_rules order preservation
+- set_distance_kb edge cases
+
+### TssExonInfo/TtsExonInfo Tests (4 tests)
+- Field access
+- Negative/zero values
+
+### Transcript Level Processing Tests (4 tests)
+- Filtering by transcript
+- Multiple transcripts
+- pctg_region/area filtering
+
+### BED Reader Extended Tests (5 tests)
+- Very long lines
+- Max metadata columns
+- Scientific notation
+- Windows line endings
+- Mixed whitespace
+
+### check_tss/check_tts Edge Cases (13 tests)
+- Single bp regions
+- Exact boundary conditions
+- Percentage calculations
+- Zero distances
+- Large zones
+- Spanning multiple zones
 
 ## Next Steps for Coverage
 1. Add integration tests with real BED/GTF sample files

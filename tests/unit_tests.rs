@@ -2573,9 +2573,8 @@ mod test_config_extended {
     #[test]
     fn test_config_parse_rules_preserves_order() {
         let mut config = Config::new();
-        let result = config.parse_rules(
-            "DOWNSTREAM,UPSTREAM,GENE_BODY,INTRON,TTS,PROMOTER,1st_EXON,TSS",
-        );
+        let result =
+            config.parse_rules("DOWNSTREAM,UPSTREAM,GENE_BODY,INTRON,TTS,PROMOTER,1st_EXON,TSS");
         assert!(result);
 
         // Verify order is preserved

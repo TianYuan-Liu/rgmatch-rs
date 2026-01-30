@@ -5031,7 +5031,7 @@ mod test_match_regions_to_genes {
         // Both processed, but only chr1 region matches
         assert_eq!(results.len(), 2);
         assert!(!results[0].1.is_empty()); // chr1 matches
-        // chr2 doesn't match (different chrom logic is in main matching)
+                                           // chr2 doesn't match (different chrom logic is in main matching)
     }
 
     #[test]
@@ -5393,9 +5393,8 @@ mod test_config_validation {
     #[test]
     fn test_config_parse_rules_with_invalid_tag() {
         let mut config = Config::new();
-        let result = config.parse_rules(
-            "TSS,1st_EXON,PROMOTER,TTS,INTRON,GENE_BODY,UPSTREAM,INVALID_TAG",
-        );
+        let result =
+            config.parse_rules("TSS,1st_EXON,PROMOTER,TTS,INTRON,GENE_BODY,UPSTREAM,INVALID_TAG");
         assert!(!result);
     }
 
@@ -5531,9 +5530,7 @@ mod test_tss_boundary_conditions {
         // Should contain multiple zones
         assert!(!res.is_empty());
         // Should have TSS, PROMOTER, and UPSTREAM
-        assert!(
-            tags.contains(&"TSS") || tags.contains(&"PROMOTER") || tags.contains(&"UPSTREAM")
-        );
+        assert!(tags.contains(&"TSS") || tags.contains(&"PROMOTER") || tags.contains(&"UPSTREAM"));
     }
 }
 
@@ -5738,7 +5735,10 @@ mod test_gtf_parser_edge_cases {
         let gene = &result.genes_by_chrom["chr1"][0];
 
         assert_eq!(gene.transcripts[0].exons.len(), 1);
-        assert_eq!(gene.transcripts[0].exons[0].exon_number, Some("1".to_string()));
+        assert_eq!(
+            gene.transcripts[0].exons[0].exon_number,
+            Some("1".to_string())
+        );
     }
 
     #[test]
@@ -5858,7 +5858,10 @@ mod test_gtf_parser_edge_cases {
         let result = parse_gtf(temp_file.path(), "gene_id", "transcript_id").unwrap();
 
         // Both exons are added (parser doesn't dedupe)
-        assert_eq!(result.genes_by_chrom["chr1"][0].transcripts[0].exons.len(), 2);
+        assert_eq!(
+            result.genes_by_chrom["chr1"][0].transcripts[0].exons.len(),
+            2
+        );
     }
 }
 

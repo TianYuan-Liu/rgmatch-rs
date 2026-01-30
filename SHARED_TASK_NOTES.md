@@ -1,83 +1,94 @@
 # Unit Test Coverage Task Notes
 
 ## Current Status
-Unit tests increased from 226 to 282 tests (56 new tests added this iteration).
+Unit tests increased from 282 to 348 tests (66 new tests added this iteration).
 
-## Tests Added This Iteration (Iteration 9)
+## Tests Added This Iteration (Iteration 10)
 
-### Gene Extended Tests (8 tests)
-- Empty transcripts handling
-- Mixed transcripts (some empty)
-- Multiple overlapping transcripts
-- calculate_size boundary behavior
-- Strand preservation
-- Debug trait
+### Error Types Display/Error Trait Tests (9 tests)
+- ParseStrandError display and Error trait
+- ParseAreaError display and Error trait
+- ParseReportLevelError display and Error trait
+- Clone implementations for all error types
 
-### Region Extended Tests (9 tests)
-- Special chromosome names (chr1_random, chrUn_gl000220)
-- Empty chromosome
-- Negative coordinates
-- Zero-length regions
-- Inverted coordinates
-- Very large coordinates
-- Metadata with special characters
-- Unicode chromosome names
-
-### Exon Extended Tests (5 tests)
-- Exon with exon number
-- Large span length
-- Single base length
-- Negative coordinates
-- Debug trait
-
-### Overlap Complex Tests (7 tests)
-- Region spans entire gene
-- Exact exon match
-- Region between two genes
+### match_region_to_genes Overlap Cases (12 tests)
+- Case 1: Exon before region, region in intron
+- Case 2: Exon overlapping partially (left)
+- Case 3: Exon completely inside region
+- Case 4: Exon overlapping region shifted right
+- Case 5: Region completely within exon
+- Case 6: Exon totally after region (upstream)
+- Negative strand first exon handling
+- TTS checking for positive strand
+- TSS checking for upstream region
 - Multiple transcripts same gene
-- Gene-level merging
+- Region spanning multiple features
+
+### GtfData Struct Tests (7 tests)
+- max_lengths calculation
+- Multiple genes max length
+- Multiple chromosomes handling
+- GtfData clone
+- Exon-only GTF (no gene/transcript entries)
+- Invalid strand skipping
+- Custom gene/transcript tags
+
+### BedReader Edge Cases (9 tests)
+- Very long lines (10000 chars)
+- Special chromosome names
+- Zero coordinates
+- Large coordinates (>1 billion)
+- Metadata with special characters
+- Chunk boundary handling
+- Whitespace in metadata
+- Negative coordinates
+
+### Config Default Rules Tests (4 tests)
+- DEFAULT_RULES order verification
+- DEFAULT_RULES length check
+- Config rules matches defaults
+- Config tags defaults
+
+### match_regions_to_genes Integration (4 tests)
 - Empty input handling
-- Negative strand TSS calculation
+- Empty genes handling
+- Multiple sorted regions
+- max_gene_length usage
 
-### Output Special Character Tests (7 tests)
-- Metadata with tabs
-- Metadata with newlines
-- Unicode metadata
-- Empty strings
-- Negative distances
-- All header columns
-- Tab separation verification
+### TSS/TTS Boundary Tests (9 tests)
+- Exact TSS boundary
+- Exact promoter boundary
+- Exact TTS boundary
+- Zero TSS/promoter values
+- Very large values
+- Negative strand coordinate flipping
+- TTS negative strand no flip
 
-### GTF Attribute Extended Tests (7 tests)
-- Semicolon in value
-- Spaces around quotes
-- Numeric values
-- Long values
-- Extra attributes
-- Key as prefix handling
-- Missing transcript_id
+### apply_rules Edge Cases (5 tests)
+- All same area different percentages
+- Empty rules fallback
+- pctg_area then region filtering
+- Multiple groups independent
+- Order preservation
 
-### find_search_start_index Extended Tests (8 tests)
-- Exact match
-- Just before/after boundaries
-- Negative search value
-- Zero search value
-- Very large search value
-- Single gene cases
-- Duplicate start positions
+### select_transcript Edge Cases (4 tests)
+- Merge max percentages
+- Different areas picks best
+- Fallback to first area
+- Merged transcript IDs
 
-### Candidate Extended Tests (5 tests)
-- All area types
-- Negative percentages
-- Zero values
-- Large coordinates
-- Debug trait
+### Output Formatting Extended (5 tests)
+- Varying meta column counts
+- All areas in output
+- Decimal formatting precision
+- Region ID format
+- Metadata trimming
 
 ## Running Tests
 ```bash
-cargo test --test unit_tests  # Unit tests (282 tests)
+cargo test --test unit_tests  # Unit tests (348 tests)
 cargo test --lib              # Library tests (55 tests)
-cargo test                    # All tests (~337 total, excluding integration)
+cargo test                    # All tests (~403 total, excluding integration)
 ```
 
 ## Next Steps for Coverage

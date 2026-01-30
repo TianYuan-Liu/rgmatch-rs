@@ -89,7 +89,6 @@ pub fn match_region_to_genes(
                 if exon.end < start {
                     // Check whether the current gene also covers the region
 
-
                     let dist_tmp = pm - exon.end;
 
                     // Check if it's the last exon
@@ -144,7 +143,8 @@ pub fn match_region_to_genes(
                                 let pctg_area =
                                     (region_length as f64 / intron_length as f64) * 100.0;
 
-                                let my_id = format!("{}_{}", gene.gene_id, transcript.transcript_id);
+                                let my_id =
+                                    format!("{}_{}", gene.gene_id, transcript.transcript_id);
                                 let intron_candidate = Candidate::new(
                                     exon.start,
                                     exon.end,
@@ -158,10 +158,11 @@ pub fn match_region_to_genes(
                                     pctg_area,
                                     tss_distance,
                                 );
-                                my_introns
-                                    .entry(my_id)
-                                    .or_default()
-                                    .push((intron_candidate, intron_length, region_length));
+                                my_introns.entry(my_id).or_default().push((
+                                    intron_candidate,
+                                    intron_length,
+                                    region_length,
+                                ));
                                 break;
                             } else {
                                 // Region overlaps with next exon
@@ -171,7 +172,8 @@ pub fn match_region_to_genes(
                                 let pctg_area =
                                     (region_overlap as f64 / intron_length as f64) * 100.0;
 
-                                let my_id = format!("{}_{}", gene.gene_id, transcript.transcript_id);
+                                let my_id =
+                                    format!("{}_{}", gene.gene_id, transcript.transcript_id);
                                 let intron_candidate = Candidate::new(
                                     exon.start,
                                     exon.end,
@@ -185,10 +187,11 @@ pub fn match_region_to_genes(
                                     pctg_area,
                                     tss_distance,
                                 );
-                                my_introns
-                                    .entry(my_id)
-                                    .or_default()
-                                    .push((intron_candidate, intron_length, region_overlap));
+                                my_introns.entry(my_id).or_default().push((
+                                    intron_candidate,
+                                    intron_length,
+                                    region_overlap,
+                                ));
                             }
                         }
                     }
@@ -233,10 +236,11 @@ pub fn match_region_to_genes(
                             pctg_area,
                             tss_distance,
                         );
-                        my_gene_bodys
-                            .entry(my_id)
-                            .or_default()
-                            .push((gb_candidate, exon_length, body_overlap));
+                        my_gene_bodys.entry(my_id).or_default().push((
+                            gb_candidate,
+                            exon_length,
+                            body_overlap,
+                        ));
                     }
 
                     // Handle remaining region after exon
@@ -342,7 +346,8 @@ pub fn match_region_to_genes(
                                 let pctg_area =
                                     (region_overlap as f64 / intron_length as f64) * 100.0;
 
-                                let my_id = format!("{}_{}", gene.gene_id, transcript.transcript_id);
+                                let my_id =
+                                    format!("{}_{}", gene.gene_id, transcript.transcript_id);
                                 let intron_candidate = Candidate::new(
                                     exon.start,
                                     exon.end,
@@ -356,10 +361,11 @@ pub fn match_region_to_genes(
                                     pctg_area,
                                     tss_distance,
                                 );
-                                my_introns
-                                    .entry(my_id)
-                                    .or_default()
-                                    .push((intron_candidate, intron_length, region_overlap));
+                                my_introns.entry(my_id).or_default().push((
+                                    intron_candidate,
+                                    intron_length,
+                                    region_overlap,
+                                ));
                                 break;
                             } else {
                                 let region_overlap = next_exon.start - exon.end - 1;
@@ -368,7 +374,8 @@ pub fn match_region_to_genes(
                                 let pctg_area =
                                     (region_overlap as f64 / intron_length as f64) * 100.0;
 
-                                let my_id = format!("{}_{}", gene.gene_id, transcript.transcript_id);
+                                let my_id =
+                                    format!("{}_{}", gene.gene_id, transcript.transcript_id);
                                 let intron_candidate = Candidate::new(
                                     exon.start,
                                     exon.end,
@@ -383,10 +390,11 @@ pub fn match_region_to_genes(
                                     tss_distance,
                                 );
 
-                                my_introns
-                                    .entry(my_id)
-                                    .or_default()
-                                    .push((intron_candidate, intron_length, region_overlap));
+                                my_introns.entry(my_id).or_default().push((
+                                    intron_candidate,
+                                    intron_length,
+                                    region_overlap,
+                                ));
                             }
                         }
                     }
@@ -520,10 +528,11 @@ pub fn match_region_to_genes(
                             pctg_area,
                             tss_distance,
                         );
-                        my_gene_bodys
-                            .entry(my_id)
-                            .or_default()
-                            .push((gb_candidate, exon_length, exon_length));
+                        my_gene_bodys.entry(my_id).or_default().push((
+                            gb_candidate,
+                            exon_length,
+                            exon_length,
+                        ));
                     }
 
                     // Handle downstream portion after exon
@@ -629,7 +638,8 @@ pub fn match_region_to_genes(
                                 let pctg_area =
                                     (region_overlap as f64 / intron_length as f64) * 100.0;
 
-                                let my_id = format!("{}_{}", gene.gene_id, transcript.transcript_id);
+                                let my_id =
+                                    format!("{}_{}", gene.gene_id, transcript.transcript_id);
                                 let intron_candidate = Candidate::new(
                                     exon.start,
                                     exon.end,
@@ -643,10 +653,11 @@ pub fn match_region_to_genes(
                                     pctg_area,
                                     tss_distance,
                                 );
-                                my_introns
-                                    .entry(my_id)
-                                    .or_default()
-                                    .push((intron_candidate, intron_length, region_overlap));
+                                my_introns.entry(my_id).or_default().push((
+                                    intron_candidate,
+                                    intron_length,
+                                    region_overlap,
+                                ));
                                 break;
                             } else {
                                 let region_overlap = next_exon.start - exon.end - 1;
@@ -655,7 +666,8 @@ pub fn match_region_to_genes(
                                 let pctg_area =
                                     (region_overlap as f64 / intron_length as f64) * 100.0;
 
-                                let my_id = format!("{}_{}", gene.gene_id, transcript.transcript_id);
+                                let my_id =
+                                    format!("{}_{}", gene.gene_id, transcript.transcript_id);
                                 let intron_candidate = Candidate::new(
                                     exon.start,
                                     exon.end,
@@ -669,10 +681,11 @@ pub fn match_region_to_genes(
                                     pctg_area,
                                     tss_distance,
                                 );
-                                my_introns
-                                    .entry(my_id)
-                                    .or_default()
-                                    .push((intron_candidate, intron_length, region_overlap));
+                                my_introns.entry(my_id).or_default().push((
+                                    intron_candidate,
+                                    intron_length,
+                                    region_overlap,
+                                ));
                             }
                         }
                     }
@@ -805,10 +818,11 @@ pub fn match_region_to_genes(
                             pctg_area,
                             tss_distance,
                         );
-                        my_gene_bodys
-                            .entry(my_id)
-                            .or_default()
-                            .push((gb_candidate, exon_length, region_overlap));
+                        my_gene_bodys.entry(my_id).or_default().push((
+                            gb_candidate,
+                            exon_length,
+                            region_overlap,
+                        ));
                     }
                 }
                 // Case 5: Region completely within the exon
@@ -851,10 +865,11 @@ pub fn match_region_to_genes(
                             pctg_area,
                             tss_distance,
                         );
-                        my_gene_bodys
-                            .entry(my_id)
-                            .or_default()
-                            .push((gb_candidate, exon_length, region_length));
+                        my_gene_bodys.entry(my_id).or_default().push((
+                            gb_candidate,
+                            exon_length,
+                            region_length,
+                        ));
                     }
                 }
                 // Case 6: Exon totally after the region
@@ -916,9 +931,7 @@ pub fn match_region_to_genes(
                     strand: exon_down_ref.strand,
                     distance: exon_down_ref.distance,
                 };
-                for (tag, pctg_dhs, pctg_a) in
-                    check_tts(start, end, &exon_info, config.tts)
-                {
+                for (tag, pctg_dhs, pctg_a) in check_tts(start, end, &exon_info, config.tts) {
                     final_output.push(Candidate::new(
                         exon_down_ref.start,
                         exon_down_ref.end,
@@ -1066,10 +1079,10 @@ pub fn process_candidates_for_output(
             // Rust output is a strict superset of Golden (0 missing lines).
             // To maintain parity (and safety), we return all candidates.
             candidates
-        },
+        }
         ReportLevel::Transcript => {
             // Transcript Level Logic: Best candidate per transcript.
-            
+
             // Group by transcript for apply_rules
             let mut by_transcript: AHashMap<String, Vec<usize>> = AHashMap::new();
             for (i, c) in candidates.iter().enumerate() {

@@ -12,6 +12,66 @@ use crate::matcher::tss::{check_tss, TssExonInfo};
 use crate::matcher::tts::{check_tts, TtsExonInfo};
 use crate::types::{Area, Candidate, Gene, Region, ReportLevel, Strand};
 
+/// Calculate the intron number based on exon index and strand.
+///
+/// For positive strand genes, intron N is between exon N and exon N+1.
+/// For negative strand genes, the numbering is reversed from the 3' end.
+fn calculate_intron_number(index: usize, total_exons: usize, strand: Strand) -> usize {
+    match strand {
+        Strand::Positive => index + 1,
+        Strand::Negative => total_exons - 1 - index,
+    }
+}
+
+/// Aggregate overlapping entries (gene body or intron) into a single candidate per transcript.
+///
+/// Takes a map of entries grouped by transcript key and combines overlapping regions
+/// into single candidates with aggregated statistics.
+fn aggregate_entries(
+    entries_map: IndexMap<String, Vec<(Candidate, i64, i64)>>,
+    region_length: i64,
+) -> Vec<Candidate> {
+    let mut results = Vec::new();
+
+    for (_, entries) in entries_map {
+        if entries.len() == 1 {
+            results.push(entries[0].0.clone());
+        } else {
+            let mut total_area = 0i64;
+            let mut total_overlap = 0i64;
+            let mut combined_numbers = String::new();
+
+            for (candidate, area_len, overlap) in &entries {
+                total_area += area_len;
+                total_overlap += overlap;
+                combined_numbers.push_str(&candidate.exon_number);
+                combined_numbers.push(',');
+            }
+            combined_numbers.pop(); // Remove trailing comma
+
+            let ref_candidate = &entries[0].0;
+            let pctg_region = (total_overlap as f64 / region_length as f64) * 100.0;
+            let pctg_area = (total_overlap as f64 / total_area as f64) * 100.0;
+
+            results.push(Candidate::new(
+                ref_candidate.start,
+                ref_candidate.end,
+                ref_candidate.strand,
+                combined_numbers,
+                ref_candidate.area,
+                ref_candidate.transcript.clone(),
+                ref_candidate.gene.clone(),
+                ref_candidate.distance,
+                pctg_region,
+                pctg_area,
+                ref_candidate.tss_distance,
+            ));
+        }
+    }
+
+    results
+}
+
 /// Match a single region to genes and return all candidates.
 ///
 /// This implements the main matching logic from the Python code.
@@ -131,11 +191,8 @@ pub fn match_region_to_genes(
                         if next_exon.start > start {
                             flag_gene_body = true;
                             let intron_length = next_exon.start - exon.end - 1;
-                            let intron_number = if gene.strand == Strand::Positive {
-                                j + 1
-                            } else {
-                                exons.len() - 1 - j
-                            };
+                            let intron_number =
+                                calculate_intron_number(j, exons.len(), gene.strand);
 
                             if next_exon.start > end {
                                 // Region is completely inside intron
@@ -333,11 +390,8 @@ pub fn match_region_to_genes(
                             // Check intron after exon
                             let next_exon = &exons[j + 1];
                             let intron_length = next_exon.start - exon.end - 1;
-                            let intron_number = if gene.strand == Strand::Positive {
-                                j + 1
-                            } else {
-                                exons.len() - 1 - j
-                            };
+                            let intron_number =
+                                calculate_intron_number(j, exons.len(), gene.strand);
 
                             if next_exon.start > end {
                                 let region_overlap = end - exon.end;
@@ -625,11 +679,8 @@ pub fn match_region_to_genes(
                             // Check intron after exon
                             let next_exon = &exons[j + 1];
                             let intron_length = next_exon.start - exon.end - 1;
-                            let intron_number = if gene.strand == Strand::Positive {
-                                j + 1
-                            } else {
-                                exons.len() - 1 - j
-                            };
+                            let intron_number =
+                                calculate_intron_number(j, exons.len(), gene.strand);
 
                             if next_exon.start > end {
                                 let region_overlap = end - exon.end;
@@ -980,78 +1031,10 @@ pub fn match_region_to_genes(
     // Sum up gene body and intron overlaps
     if flag_gene_body {
         // Gene body
-        for (_, entries) in my_gene_bodys {
-            if entries.len() == 1 {
-                final_output.push(entries[0].0.clone());
-            } else {
-                let mut total_area = 0i64;
-                let mut total_overlap = 0i64;
-                let mut exon_nr = String::new();
-
-                for (candidate, area_len, overlap) in &entries {
-                    total_area += area_len;
-                    total_overlap += overlap;
-                    exon_nr.push_str(&candidate.exon_number);
-                    exon_nr.push(',');
-                }
-                exon_nr.pop(); // Remove trailing comma
-
-                let ref_candidate = &entries[0].0;
-                let pctg_region = (total_overlap as f64 / region_length as f64) * 100.0;
-                let pctg_area = (total_overlap as f64 / total_area as f64) * 100.0;
-
-                final_output.push(Candidate::new(
-                    ref_candidate.start,
-                    ref_candidate.end,
-                    ref_candidate.strand,
-                    exon_nr,
-                    ref_candidate.area,
-                    ref_candidate.transcript.clone(),
-                    ref_candidate.gene.clone(),
-                    ref_candidate.distance,
-                    pctg_region,
-                    pctg_area,
-                    ref_candidate.tss_distance,
-                ));
-            }
-        }
+        final_output.extend(aggregate_entries(my_gene_bodys, region_length));
 
         // Introns
-        for (_, entries) in my_introns {
-            if entries.len() == 1 {
-                final_output.push(entries[0].0.clone());
-            } else {
-                let mut total_area = 0i64;
-                let mut total_overlap = 0i64;
-                let mut intron_nr = String::new();
-
-                for (candidate, area_len, overlap) in &entries {
-                    total_area += area_len;
-                    total_overlap += overlap;
-                    intron_nr.push_str(&candidate.exon_number);
-                    intron_nr.push(',');
-                }
-                intron_nr.pop(); // Remove trailing comma
-
-                let ref_candidate = &entries[0].0;
-                let pctg_region = (total_overlap as f64 / region_length as f64) * 100.0;
-                let pctg_area = (total_overlap as f64 / total_area as f64) * 100.0;
-
-                final_output.push(Candidate::new(
-                    ref_candidate.start,
-                    ref_candidate.end,
-                    ref_candidate.strand,
-                    intron_nr,
-                    ref_candidate.area,
-                    ref_candidate.transcript.clone(),
-                    ref_candidate.gene.clone(),
-                    ref_candidate.distance,
-                    pctg_region,
-                    pctg_area,
-                    ref_candidate.tss_distance,
-                ));
-            }
-        }
+        final_output.extend(aggregate_entries(my_introns, region_length));
     }
 
     final_output

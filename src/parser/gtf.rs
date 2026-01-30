@@ -5,11 +5,11 @@
 
 use ahash::AHashMap;
 use anyhow::{Context, Result};
-use flate2::read::GzDecoder;
 use std::fs::File;
-use std::io::{BufRead, BufReader};
+use std::io::BufRead;
 use std::path::Path;
 
+use crate::parser::util::create_buffered_reader;
 use crate::types::{Exon, Gene, Strand, Transcript};
 
 /// Result of parsing a GTF file.
@@ -26,12 +26,7 @@ pub struct GtfData {
 /// Supports both plain text and gzip-compressed GTF files.
 pub fn parse_gtf(path: &Path, gene_id_tag: &str, transcript_id_tag: &str) -> Result<GtfData> {
     let file = File::open(path).context("Failed to open GTF file")?;
-
-    let reader: Box<dyn BufRead> = if path.to_string_lossy().ends_with(".gz") {
-        Box::new(BufReader::new(GzDecoder::new(file)))
-    } else {
-        Box::new(BufReader::new(file))
-    };
+    let reader = create_buffered_reader(file, path);
 
     parse_gtf_reader(reader, gene_id_tag, transcript_id_tag)
 }
@@ -244,6 +239,7 @@ fn extract_attribute(attributes: &str, key: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::BufReader;
 
     #[test]
     fn test_extract_attribute() {

@@ -4,11 +4,11 @@
 
 use ahash::AHashMap;
 use anyhow::{Context, Result};
-use flate2::read::GzDecoder;
 use std::fs::File;
-use std::io::{BufRead, BufReader};
+use std::io::BufRead;
 use std::path::Path;
 
+use crate::parser::util::create_buffered_reader;
 use crate::types::Region;
 
 /// Streaming BED file reader for chunked processing.
@@ -24,12 +24,7 @@ impl BedReader {
     /// Create a new BedReader from a file path (supports .gz).
     pub fn new(path: &Path) -> Result<Self> {
         let file = File::open(path).context("Failed to open BED file")?;
-
-        let reader: Box<dyn BufRead + Send> = if path.to_string_lossy().ends_with(".gz") {
-            Box::new(BufReader::new(GzDecoder::new(file)))
-        } else {
-            Box::new(BufReader::new(file))
-        };
+        let reader = create_buffered_reader(file, path);
 
         Ok(BedReader {
             reader,
@@ -126,12 +121,7 @@ pub struct BedData {
 /// Supports both plain text and gzip-compressed BED files.
 pub fn parse_bed(path: &Path) -> Result<BedData> {
     let file = File::open(path).context("Failed to open BED file")?;
-
-    let reader: Box<dyn BufRead> = if path.to_string_lossy().ends_with(".gz") {
-        Box::new(BufReader::new(GzDecoder::new(file)))
-    } else {
-        Box::new(BufReader::new(file))
-    };
+    let reader = create_buffered_reader(file, path);
 
     parse_bed_reader(reader)
 }
@@ -212,6 +202,7 @@ pub fn get_bed_headers(num_columns: usize) -> Vec<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::BufReader;
 
     #[test]
     fn test_parse_bed_basic() {

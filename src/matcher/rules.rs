@@ -7,6 +7,39 @@ use ahash::{AHashMap, AHashSet};
 
 use crate::types::{Area, Candidate};
 
+/// Order keys by their first appearance in the candidates list.
+///
+/// This preserves "insertion order" (file order) to match Python behavior.
+/// Keys not found in candidates are sorted and appended at the end.
+fn order_keys_by_occurrence<'a, F>(
+    candidates: &'a [Candidate],
+    grouped_by: &'a AHashMap<String, Vec<usize>>,
+    key_fn: F,
+) -> Vec<&'a String>
+where
+    F: Fn(&Candidate) -> &String,
+{
+    let mut key_order = Vec::new();
+    let mut seen = AHashSet::new();
+
+    // Iterate candidates to find unique keys in order of first appearance
+    for c in candidates {
+        let key = key_fn(c);
+        if grouped_by.contains_key(key) && !seen.contains(key) {
+            seen.insert(key);
+            key_order.push(key);
+        }
+    }
+
+    // Add any keys from grouped_by that weren't in candidates (unlikely but safe)
+    let mut remaining_keys: Vec<&String> =
+        grouped_by.keys().filter(|k| !seen.contains(*k)).collect();
+    remaining_keys.sort();
+    key_order.extend(remaining_keys);
+
+    key_order
+}
+
 /// Apply priority rules to select the best candidate per group.
 ///
 /// Filters candidates by percentage thresholds and applies rule-based
@@ -30,28 +63,7 @@ pub fn apply_rules(
 ) -> Vec<Candidate> {
     let mut to_report = Vec::new();
 
-    let mut keys: Vec<&String> = grouped_by.keys().collect();
-    keys.sort();
-
-    // Iterate keys in order of first appearance in candidates
-    // This preserves "insertion order" (file order) to match Python behavior
-    let mut key_order = Vec::new();
-    let mut seen = AHashSet::new();
-
-    // We assume candidates are passed in order. We iterate them to find unique keys.
-    for c in candidates {
-        let key = &c.transcript;
-        if grouped_by.contains_key(key) && !seen.contains(key) {
-            seen.insert(key);
-            key_order.push(key);
-        }
-    }
-
-    // Add any keys from grouped_by that weren't in candidates (unlikely but safe)
-    let mut remaining_keys: Vec<&String> =
-        grouped_by.keys().filter(|k| !seen.contains(*k)).collect();
-    remaining_keys.sort();
-    key_order.extend(remaining_keys);
+    let key_order = order_keys_by_occurrence(candidates, grouped_by, |c| &c.transcript);
 
     for key in key_order {
         let positions = &grouped_by[key];
@@ -158,23 +170,8 @@ pub fn select_transcript(
 ) -> Vec<Candidate> {
     let mut to_report = Vec::new();
 
-    // Iterate keys in order of first appearance in candidates
-    // For select_transcript, it is grouped by Gene ID.
-    let mut key_order = Vec::new();
-    let mut seen = AHashSet::new();
-
-    for c in candidates {
-        let key = &c.gene;
-        if grouped_by.contains_key(key) && !seen.contains(key) {
-            seen.insert(key);
-            key_order.push(key);
-        }
-    }
-
-    let mut remaining_keys: Vec<&String> =
-        grouped_by.keys().filter(|k| !seen.contains(*k)).collect();
-    remaining_keys.sort();
-    key_order.extend(remaining_keys);
+    // Iterate keys in order of first appearance in candidates (grouped by Gene ID)
+    let key_order = order_keys_by_occurrence(candidates, grouped_by, |c| &c.gene);
 
     for key in key_order {
         let positions = &grouped_by[key];

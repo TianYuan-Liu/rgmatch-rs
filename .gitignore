@@ -6,8 +6,18 @@
 # More information here https://doc.rust-lang.org/cargo/guide/cargo-toml-vs-cargo-lock.html
 # Cargo.lock
 
-# Ignore large data files
-tests/data/
+# Ignore large data files (full dataset)
+tests/data/full_*.gtf
+tests/data/full_*.bed
+tests/data/full_golden_output*.txt
+tests/data/old_golden_output*.txt
+tests/data/integration_test_output.txt
+tests/data/*.py
+tests/data/*.png
+tests/data/*.md
+tests/data/*_comparison*.txt
+tests/data/venn_data.txt
+tests/data/lines_only_in_*.txt
 
 # OS-specific files
 .DS_Store

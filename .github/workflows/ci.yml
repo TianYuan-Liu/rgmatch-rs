@@ -32,5 +32,8 @@ jobs:
       - name: Run unit tests
         run: cargo test --test unit_tests
 
+      - name: Run integration tests
+        run: cargo test --test integration_test
+
       - name: Build release
         run: cargo build --release

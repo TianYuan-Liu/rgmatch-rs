@@ -1898,6 +1898,691 @@ mod test_overlap_functions {
 // 10. Output Module Tests
 // -------------------------------------------------------------------------
 
+// -------------------------------------------------------------------------
+// 10. Parser Module Tests (BED)
+// -------------------------------------------------------------------------
+
+mod test_parser_bed {
+    use rgmatch::parser::bed::{get_bed_headers, BedData};
+    use std::collections::HashSet;
+
+    #[test]
+    fn test_get_bed_headers_zero() {
+        let headers = get_bed_headers(0);
+        assert!(headers.is_empty());
+    }
+
+    #[test]
+    fn test_get_bed_headers_one() {
+        let headers = get_bed_headers(1);
+        assert_eq!(headers, vec!["name"]);
+    }
+
+    #[test]
+    fn test_get_bed_headers_six() {
+        let headers = get_bed_headers(6);
+        assert_eq!(
+            headers,
+            vec!["name", "score", "strand", "thickStart", "thickEnd", "itemRgb"]
+        );
+    }
+
+    #[test]
+    fn test_get_bed_headers_nine() {
+        let headers = get_bed_headers(9);
+        assert_eq!(
+            headers,
+            vec![
+                "name",
+                "score",
+                "strand",
+                "thickStart",
+                "thickEnd",
+                "itemRgb",
+                "blockCount",
+                "blockSizes",
+                "blockStarts"
+            ]
+        );
+    }
+
+    #[test]
+    fn test_get_bed_headers_beyond_nine() {
+        // Should cap at 9 headers
+        let headers = get_bed_headers(100);
+        assert_eq!(headers.len(), 9);
+    }
+
+    #[test]
+    fn test_bed_data_struct() {
+        // Test BedData struct creation
+        use ahash::AHashMap;
+        use rgmatch::Region;
+
+        let mut regions_by_chrom: AHashMap<String, Vec<Region>> = AHashMap::new();
+        regions_by_chrom.insert(
+            "chr1".to_string(),
+            vec![Region::new("chr1".to_string(), 100, 200, vec![])],
+        );
+
+        let bed_data = BedData {
+            regions_by_chrom,
+            num_meta_columns: 3,
+        };
+
+        assert!(bed_data.regions_by_chrom.contains_key("chr1"));
+        assert_eq!(bed_data.num_meta_columns, 3);
+    }
+
+    #[test]
+    fn test_bed_data_multiple_chromosomes() {
+        use ahash::AHashMap;
+        use rgmatch::Region;
+
+        let mut regions_by_chrom: AHashMap<String, Vec<Region>> = AHashMap::new();
+        regions_by_chrom.insert(
+            "chr1".to_string(),
+            vec![Region::new("chr1".to_string(), 100, 200, vec![])],
+        );
+        regions_by_chrom.insert(
+            "chr2".to_string(),
+            vec![Region::new("chr2".to_string(), 300, 400, vec![])],
+        );
+        regions_by_chrom.insert(
+            "chrX".to_string(),
+            vec![Region::new("chrX".to_string(), 500, 600, vec![])],
+        );
+
+        let bed_data = BedData {
+            regions_by_chrom,
+            num_meta_columns: 0,
+        };
+
+        assert_eq!(bed_data.regions_by_chrom.len(), 3);
+        let chroms: HashSet<_> = bed_data.regions_by_chrom.keys().collect();
+        assert!(chroms.contains(&"chr1".to_string()));
+        assert!(chroms.contains(&"chr2".to_string()));
+        assert!(chroms.contains(&"chrX".to_string()));
+    }
+
+    #[test]
+    fn test_bed_data_empty() {
+        use ahash::AHashMap;
+        use rgmatch::Region;
+
+        let regions_by_chrom: AHashMap<String, Vec<Region>> = AHashMap::new();
+
+        let bed_data = BedData {
+            regions_by_chrom,
+            num_meta_columns: 0,
+        };
+
+        assert!(bed_data.regions_by_chrom.is_empty());
+        assert_eq!(bed_data.num_meta_columns, 0);
+    }
+
+    #[test]
+    fn test_bed_data_with_metadata() {
+        use ahash::AHashMap;
+        use rgmatch::Region;
+
+        let mut regions_by_chrom: AHashMap<String, Vec<Region>> = AHashMap::new();
+        regions_by_chrom.insert(
+            "chr1".to_string(),
+            vec![Region::new(
+                "chr1".to_string(),
+                100,
+                200,
+                vec!["peak1".to_string(), "500".to_string(), "+".to_string()],
+            )],
+        );
+
+        let bed_data = BedData {
+            regions_by_chrom,
+            num_meta_columns: 3,
+        };
+
+        let regions = &bed_data.regions_by_chrom["chr1"];
+        assert_eq!(regions[0].metadata.len(), 3);
+        assert_eq!(regions[0].metadata[0], "peak1");
+    }
+}
+
+// -------------------------------------------------------------------------
+// 11. Parser Module Tests (GTF)
+// -------------------------------------------------------------------------
+
+mod test_parser_gtf {
+    use rgmatch::parser::gtf::GtfData;
+    use rgmatch::types::Strand;
+
+    #[test]
+    fn test_gtf_data_struct() {
+        use ahash::AHashMap;
+        use rgmatch::{Gene, Transcript};
+
+        let mut genes_by_chrom: AHashMap<String, Vec<Gene>> = AHashMap::new();
+        let mut gene = Gene::new("G1".to_string(), Strand::Positive);
+        gene.set_length(1000, 2000);
+        gene.add_transcript(Transcript::new("T1".to_string()));
+        genes_by_chrom.insert("chr1".to_string(), vec![gene]);
+
+        let mut max_lengths: AHashMap<String, i64> = AHashMap::new();
+        max_lengths.insert("chr1".to_string(), 1000);
+
+        let gtf_data = GtfData {
+            genes_by_chrom,
+            max_lengths,
+        };
+
+        assert!(gtf_data.genes_by_chrom.contains_key("chr1"));
+        assert_eq!(gtf_data.max_lengths["chr1"], 1000);
+    }
+
+    #[test]
+    fn test_gtf_data_multiple_genes() {
+        use ahash::AHashMap;
+        use rgmatch::Gene;
+
+        let mut genes_by_chrom: AHashMap<String, Vec<Gene>> = AHashMap::new();
+
+        let mut genes = Vec::new();
+        for i in 1..=5 {
+            let mut gene = Gene::new(format!("G{}", i), Strand::Positive);
+            gene.set_length(i * 1000, (i + 1) * 1000);
+            genes.push(gene);
+        }
+        genes_by_chrom.insert("chr1".to_string(), genes);
+
+        let max_lengths: AHashMap<String, i64> = AHashMap::new();
+
+        let gtf_data = GtfData {
+            genes_by_chrom,
+            max_lengths,
+        };
+
+        assert_eq!(gtf_data.genes_by_chrom["chr1"].len(), 5);
+    }
+
+    #[test]
+    fn test_gtf_data_clone() {
+        use ahash::AHashMap;
+        use rgmatch::{Gene, Transcript};
+
+        let mut genes_by_chrom: AHashMap<String, Vec<Gene>> = AHashMap::new();
+        let mut gene = Gene::new("G1".to_string(), Strand::Negative);
+        gene.set_length(1000, 2000);
+        gene.add_transcript(Transcript::new("T1".to_string()));
+        genes_by_chrom.insert("chr1".to_string(), vec![gene]);
+
+        let mut max_lengths: AHashMap<String, i64> = AHashMap::new();
+        max_lengths.insert("chr1".to_string(), 1000);
+
+        let gtf_data = GtfData {
+            genes_by_chrom,
+            max_lengths,
+        };
+
+        // Test Clone trait
+        let cloned = gtf_data.clone();
+        assert_eq!(cloned.genes_by_chrom["chr1"][0].gene_id, "G1");
+        assert_eq!(cloned.max_lengths["chr1"], 1000);
+    }
+
+    #[test]
+    fn test_gtf_data_empty() {
+        use ahash::AHashMap;
+        use rgmatch::Gene;
+
+        let genes_by_chrom: AHashMap<String, Vec<Gene>> = AHashMap::new();
+        let max_lengths: AHashMap<String, i64> = AHashMap::new();
+
+        let gtf_data = GtfData {
+            genes_by_chrom,
+            max_lengths,
+        };
+
+        assert!(gtf_data.genes_by_chrom.is_empty());
+        assert!(gtf_data.max_lengths.is_empty());
+    }
+
+    #[test]
+    fn test_gtf_data_multiple_chromosomes() {
+        use ahash::AHashMap;
+        use rgmatch::Gene;
+
+        let mut genes_by_chrom: AHashMap<String, Vec<Gene>> = AHashMap::new();
+
+        for chrom in ["chr1", "chr2", "chrX", "chrY", "chrM"] {
+            let gene = Gene::new(format!("GENE_{}", chrom), Strand::Positive);
+            genes_by_chrom.insert(chrom.to_string(), vec![gene]);
+        }
+
+        let mut max_lengths: AHashMap<String, i64> = AHashMap::new();
+        max_lengths.insert("chr1".to_string(), 10000);
+        max_lengths.insert("chr2".to_string(), 8000);
+
+        let gtf_data = GtfData {
+            genes_by_chrom,
+            max_lengths,
+        };
+
+        assert_eq!(gtf_data.genes_by_chrom.len(), 5);
+        assert_eq!(gtf_data.max_lengths.len(), 2);
+    }
+}
+
+// -------------------------------------------------------------------------
+// 12. Config Extended Tests
+// -------------------------------------------------------------------------
+
+mod test_config_extended {
+    use rgmatch::config::Config;
+    use rgmatch::types::{Area, ReportLevel};
+
+    #[test]
+    fn test_config_default_gtf_tags() {
+        let config = Config::default();
+        assert_eq!(config.gene_id_tag, "gene_id");
+        assert_eq!(config.transcript_id_tag, "transcript_id");
+    }
+
+    #[test]
+    fn test_config_custom_gtf_tags() {
+        let mut config = Config::new();
+        config.gene_id_tag = "gene_name".to_string();
+        config.transcript_id_tag = "transcript_name".to_string();
+
+        assert_eq!(config.gene_id_tag, "gene_name");
+        assert_eq!(config.transcript_id_tag, "transcript_name");
+    }
+
+    #[test]
+    fn test_config_report_level_default() {
+        let config = Config::default();
+        assert_eq!(config.level, ReportLevel::Exon);
+    }
+
+    #[test]
+    fn test_config_report_level_change() {
+        let mut config = Config::new();
+        config.level = ReportLevel::Transcript;
+        assert_eq!(config.level, ReportLevel::Transcript);
+
+        config.level = ReportLevel::Gene;
+        assert_eq!(config.level, ReportLevel::Gene);
+    }
+
+    #[test]
+    fn test_config_extreme_values() {
+        let mut config = Config::new();
+
+        // Very large TSS
+        config.tss = 100000.0;
+        assert_eq!(config.max_lookback_distance(), 100000);
+
+        // Very large promoter
+        config.tss = 200.0;
+        config.promoter = 50000.0;
+        assert_eq!(config.max_lookback_distance(), 50000);
+
+        // Very large distance
+        config.promoter = 1300.0;
+        config.distance = 1000000;
+        assert_eq!(config.max_lookback_distance(), 1000000);
+    }
+
+    #[test]
+    fn test_config_zero_values() {
+        let mut config = Config::new();
+        config.tss = 0.0;
+        config.tts = 0.0;
+        config.promoter = 0.0;
+        config.distance = 0;
+
+        assert_eq!(config.max_lookback_distance(), 0);
+    }
+
+    #[test]
+    fn test_config_percentage_boundaries() {
+        let mut config = Config::new();
+
+        config.perc_area = 0.0;
+        config.perc_region = 0.0;
+        assert_eq!(config.perc_area, 0.0);
+        assert_eq!(config.perc_region, 0.0);
+
+        config.perc_area = 100.0;
+        config.perc_region = 100.0;
+        assert_eq!(config.perc_area, 100.0);
+        assert_eq!(config.perc_region, 100.0);
+    }
+
+    #[test]
+    fn test_config_rules_default_order() {
+        let config = Config::default();
+        assert_eq!(config.rules[0], Area::Tss);
+        assert_eq!(config.rules[1], Area::FirstExon);
+        assert_eq!(config.rules[2], Area::Promoter);
+        assert_eq!(config.rules[3], Area::Tts);
+        assert_eq!(config.rules[4], Area::Intron);
+        assert_eq!(config.rules[5], Area::GeneBody);
+        assert_eq!(config.rules[6], Area::Upstream);
+        assert_eq!(config.rules[7], Area::Downstream);
+    }
+
+    #[test]
+    fn test_config_debug_trait() {
+        let config = Config::default();
+        let debug_str = format!("{:?}", config);
+        assert!(debug_str.contains("Config"));
+        assert!(debug_str.contains("rules"));
+        assert!(debug_str.contains("perc_area"));
+    }
+}
+
+// -------------------------------------------------------------------------
+// 13. TTS-Enabled Overlap Tests
+// -------------------------------------------------------------------------
+
+mod test_overlap_with_tts {
+    use super::*;
+    use rgmatch::matcher::overlap::match_region_to_genes;
+    use rgmatch::types::Exon;
+    use rgmatch::{Gene, Region};
+
+    fn make_test_gene(
+        gene_id: &str,
+        start: i64,
+        end: i64,
+        strand: Strand,
+        exons: Vec<(i64, i64)>,
+    ) -> Gene {
+        let mut gene = Gene::new(gene_id.to_string(), strand);
+        gene.set_length(start, end);
+        let mut transcript = Transcript::new(format!("TRANS_{}", gene_id.replace("GENE", "")));
+        for (i, (exon_start, exon_end)) in exons.iter().enumerate() {
+            let mut exon = Exon::new(*exon_start, *exon_end);
+            exon.exon_number = Some((i + 1).to_string());
+            transcript.add_exon(exon);
+        }
+        transcript.calculate_size();
+        transcript.renumber_exons(strand);
+        gene.transcripts.push(transcript);
+        gene
+    }
+
+    #[test]
+    fn test_tts_enabled_downstream_region() {
+        // Test with TTS zone enabled (tts > 0)
+        let mut config = Config::default();
+        config.tts = 200.0; // Enable TTS zone
+
+        let region = Region::new("chr1".into(), 2100, 2150, vec![]);
+        let genes = vec![make_test_gene(
+            "G1",
+            1000,
+            2000,
+            Strand::Positive,
+            vec![(1000, 2000)],
+        )];
+
+        let candidates = match_region_to_genes(&region, &genes, &config, 0);
+        // With TTS enabled, downstream region within 200bp should get TTS tag
+        let has_tts = candidates.iter().any(|c| c.area == Area::Tts);
+        assert!(has_tts, "Should have TTS when tts > 0: {:?}", candidates);
+    }
+
+    #[test]
+    fn test_tts_disabled_downstream_region() {
+        // Test with TTS zone disabled (tts = 0)
+        let mut config = Config::default();
+        config.tts = 0.0; // Disable TTS zone (default)
+
+        let region = Region::new("chr1".into(), 2100, 2150, vec![]);
+        let genes = vec![make_test_gene(
+            "G1",
+            1000,
+            2000,
+            Strand::Positive,
+            vec![(1000, 2000)],
+        )];
+
+        let candidates = match_region_to_genes(&region, &genes, &config, 0);
+        // With TTS disabled, downstream region should get DOWNSTREAM tag
+        let has_downstream = candidates.iter().any(|c| c.area == Area::Downstream);
+        assert!(
+            has_downstream,
+            "Should have DOWNSTREAM when tts = 0: {:?}",
+            candidates
+        );
+    }
+
+    #[test]
+    fn test_tts_negative_strand() {
+        // Test TTS on negative strand (TTS at start)
+        let mut config = Config::default();
+        config.tts = 200.0;
+
+        let region = Region::new("chr1".into(), 800, 850, vec![]);
+        let genes = vec![make_test_gene(
+            "G1",
+            1000,
+            2000,
+            Strand::Negative,
+            vec![(1000, 2000)],
+        )];
+
+        let candidates = match_region_to_genes(&region, &genes, &config, 0);
+        // For negative strand, TTS is at gene start (1000)
+        // Region at 800-850 is 150bp before start, should be in TTS zone
+        let has_tts = candidates.iter().any(|c| c.area == Area::Tts);
+        assert!(
+            has_tts,
+            "Negative strand should have TTS: {:?}",
+            candidates
+        );
+    }
+
+    #[test]
+    fn test_large_tts_zone() {
+        let mut config = Config::default();
+        config.tts = 1000.0; // Large TTS zone
+
+        let region = Region::new("chr1".into(), 2500, 2600, vec![]);
+        let genes = vec![make_test_gene(
+            "G1",
+            1000,
+            2000,
+            Strand::Positive,
+            vec![(1000, 2000)],
+        )];
+
+        let candidates = match_region_to_genes(&region, &genes, &config, 0);
+        // Region 500-600bp downstream should be in TTS zone (1000bp)
+        let has_tts = candidates.iter().any(|c| c.area == Area::Tts);
+        assert!(
+            has_tts,
+            "Large TTS zone should capture region: {:?}",
+            candidates
+        );
+    }
+}
+
+// -------------------------------------------------------------------------
+// 14. Additional TSS Edge Cases
+// -------------------------------------------------------------------------
+
+mod test_tss_edge_cases {
+    use rgmatch::matcher::tss::{check_tss, TssExonInfo};
+    use rgmatch::types::Strand;
+
+    #[test]
+    fn test_tss_region_at_exact_boundary() {
+        let exon = TssExonInfo {
+            start: 1000,
+            end: 2000,
+            strand: Strand::Positive,
+            distance: 0,
+        };
+        // Region exactly at TSS boundary (200bp)
+        let res = check_tss(800, 800, &exon, 200.0, 1300.0);
+        // Single bp at exactly 200bp boundary
+        assert!(!res.is_empty());
+        assert!(res.iter().any(|(t, _, _)| t == "TSS"));
+    }
+
+    #[test]
+    fn test_tss_promoter_boundary() {
+        let exon = TssExonInfo {
+            start: 10000,
+            end: 11000,
+            strand: Strand::Positive,
+            distance: 201, // Just past TSS zone
+        };
+        let res = check_tss(9700, 9800, &exon, 200.0, 1300.0);
+        // Should be in promoter zone
+        assert!(res.iter().any(|(t, _, _)| t == "PROMOTER"));
+    }
+
+    #[test]
+    fn test_tss_upstream_boundary() {
+        let exon = TssExonInfo {
+            start: 10000,
+            end: 11000,
+            strand: Strand::Positive,
+            distance: 1600, // Beyond TSS + promoter (200 + 1300 = 1500)
+        };
+        let res = check_tss(8300, 8400, &exon, 200.0, 1300.0);
+        assert!(res.iter().any(|(t, _, _)| t == "UPSTREAM"));
+    }
+
+    #[test]
+    fn test_tss_very_small_region() {
+        let exon = TssExonInfo {
+            start: 1000,
+            end: 2000,
+            strand: Strand::Positive,
+            distance: 0,
+        };
+        // 1bp region
+        let res = check_tss(900, 900, &exon, 200.0, 1300.0);
+        assert!(!res.is_empty());
+    }
+
+    #[test]
+    fn test_tss_very_large_region() {
+        let exon = TssExonInfo {
+            start: 10000,
+            end: 11000,
+            strand: Strand::Positive,
+            distance: 0,
+        };
+        // Very large region spanning all zones
+        let res = check_tss(5000, 9900, &exon, 200.0, 1300.0);
+        let tags: Vec<&str> = res.iter().map(|(t, _, _)| t.as_str()).collect();
+        // Should span multiple zones
+        assert!(tags.len() >= 2, "Large region should span zones: {:?}", tags);
+    }
+
+    #[test]
+    fn test_tss_negative_strand_mirror_math() {
+        let exon = TssExonInfo {
+            start: 5000,
+            end: 6000,
+            strand: Strand::Negative,
+            distance: 0,
+        };
+        // For negative strand, TSS is at end (6000)
+        // Region 6050-6100 should be in TSS zone
+        let res = check_tss(6050, 6100, &exon, 200.0, 1300.0);
+        assert!(res.iter().any(|(t, _, _)| t == "TSS"));
+    }
+}
+
+// -------------------------------------------------------------------------
+// 15. Additional TTS Edge Cases
+// -------------------------------------------------------------------------
+
+mod test_tts_edge_cases {
+    use rgmatch::matcher::tts::{check_tts, TtsExonInfo};
+    use rgmatch::types::Strand;
+
+    #[test]
+    fn test_tts_region_at_exact_boundary() {
+        let exon = TtsExonInfo {
+            start: 1000,
+            end: 2000,
+            strand: Strand::Positive,
+            distance: 0,
+        };
+        // Region exactly at TTS boundary (200bp downstream)
+        let res = check_tts(2200, 2200, &exon, 200.0);
+        // Single bp at exactly 200bp boundary
+        assert!(!res.is_empty());
+        assert!(res.iter().any(|(t, _, _)| t == "TTS"));
+    }
+
+    #[test]
+    fn test_tts_beyond_zone() {
+        let exon = TtsExonInfo {
+            start: 1000,
+            end: 2000,
+            strand: Strand::Positive,
+            distance: 300, // Beyond TTS zone (200bp)
+        };
+        let res = check_tts(2300, 2400, &exon, 200.0);
+        // Should be DOWNSTREAM
+        assert!(res.iter().any(|(t, _, _)| t == "DOWNSTREAM"));
+    }
+
+    #[test]
+    fn test_tts_very_small_region() {
+        let exon = TtsExonInfo {
+            start: 1000,
+            end: 2000,
+            strand: Strand::Positive,
+            distance: 0,
+        };
+        // 1bp region
+        let res = check_tts(2100, 2100, &exon, 200.0);
+        assert!(!res.is_empty());
+    }
+
+    #[test]
+    fn test_tts_negative_strand_boundary() {
+        let exon = TtsExonInfo {
+            start: 5000,
+            end: 6000,
+            strand: Strand::Negative,
+            distance: 0,
+        };
+        // For negative strand, TTS is at start (5000)
+        // Region 4800-4900 should be in TTS zone
+        let res = check_tts(4800, 4900, &exon, 200.0);
+        assert!(res.iter().any(|(t, _, _)| t == "TTS"));
+    }
+
+    #[test]
+    fn test_tts_spans_zone_and_downstream() {
+        let exon = TtsExonInfo {
+            start: 1000,
+            end: 2000,
+            strand: Strand::Positive,
+            distance: 0,
+        };
+        // Region spans TTS zone (200bp) and goes into downstream
+        let res = check_tts(2100, 2400, &exon, 200.0);
+        let tags: Vec<&str> = res.iter().map(|(t, _, _)| t.as_str()).collect();
+        assert!(tags.contains(&"TTS"));
+        assert!(tags.contains(&"DOWNSTREAM"));
+    }
+}
+
+// -------------------------------------------------------------------------
+// 16. Output Module Tests
+// -------------------------------------------------------------------------
+
 mod test_output {
     use super::*;
     use rgmatch::Region;

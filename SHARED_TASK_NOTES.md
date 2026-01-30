@@ -1,62 +1,72 @@
 # Unit Test Coverage Task Notes
 
 ## Current Status
-Unit tests increased from 82 to 119 tests (37 new tests added this iteration).
+Unit tests increased from 119 to 157 tests (38 new tests added this iteration).
 
-## Tests Added This Iteration (Iteration 4)
+Total tests: 212 (157 unit tests + 55 library tests)
 
-### overlap.rs Edge Cases
-- `match_region_to_genes_intron_overlap`: Region in intron gap
-- `match_region_to_genes_negative_strand`: Negative strand exon numbering
-- `match_region_to_genes_upstream_proximity`: Upstream region detection
-- `match_region_to_genes_downstream_proximity`: Downstream region detection
-- `match_region_to_genes_multiple_genes`: Region overlapping multiple genes
-- `match_region_to_genes_gene_body`: Region in gene body (not exons)
+## Tests Added This Iteration (Iteration 5)
 
-### tss.rs Edge Cases
-- `tss_exon_info_creation`: Struct creation
-- `entirely_in_tss_zone`: 100% TSS overlap
-- `entirely_in_promoter_zone`: Promoter-only overlap
-- `spans_promoter_and_upstream`: Multi-zone spanning
-- `entirely_in_upstream_zone`: Upstream-only
-- `neg_strand_entirely_in_tss`: Negative strand TSS
-- `neg_strand_upstream`: Negative strand upstream
+### parser/bed.rs Tests (9 tests)
+- `test_get_bed_headers_zero`: Empty headers
+- `test_get_bed_headers_one`: Single header
+- `test_get_bed_headers_six`: Six standard BED columns
+- `test_get_bed_headers_nine`: All BED columns
+- `test_get_bed_headers_beyond_nine`: Headers cap at 9
+- `test_bed_data_struct`: BedData struct creation
+- `test_bed_data_multiple_chromosomes`: Multi-chrom handling
+- `test_bed_data_empty`: Empty BedData
+- `test_bed_data_with_metadata`: Metadata columns
 
-### tts.rs Edge Cases
-- `tts_exon_info_creation`: Struct creation
-- `entirely_in_tts_zone`: 100% TTS overlap
-- `entirely_in_downstream_zone`: Downstream-only
-- `neg_strand_entirely_in_tts`: Negative strand TTS
-- `neg_strand_entirely_in_downstream`: Negative strand downstream
-- `tts_zero_distance`: Zero TTS distance
-- `tts_pctg_calculations`: Percentage verification
+### parser/gtf.rs Tests (5 tests)
+- `test_gtf_data_struct`: GtfData struct creation
+- `test_gtf_data_multiple_genes`: Multiple genes per chrom
+- `test_gtf_data_clone`: Clone trait verification
+- `test_gtf_data_empty`: Empty GtfData
+- `test_gtf_data_multiple_chromosomes`: Multi-chrom handling
 
-### rules.rs Additional Tests
-- `empty_grouped_by`: Empty input handling
-- `pctg_area_threshold_filter`: pctg_area filtering
-- `multiple_groups`: Multiple transcript groups
-- `rules_no_matching_area`: No rule matches fallback
-- `select_transcript_empty`: Empty input
-- `select_transcript_no_rules_match`: Rule fallback
-- `select_transcript_multiple_genes`: Multi-gene selection
+### Config Extended Tests (8 tests)
+- `test_config_default_gtf_tags`: Default tag names
+- `test_config_custom_gtf_tags`: Custom tag configuration
+- `test_config_report_level_default`: Default Exon level
+- `test_config_report_level_change`: Level switching
+- `test_config_extreme_values`: Large TSS/promoter/distance
+- `test_config_zero_values`: Zero configuration values
+- `test_config_percentage_boundaries`: 0-100% range
+- `test_config_rules_default_order`: Rule priority order
+- `test_config_debug_trait`: Debug formatting
 
-### output.rs Tests
-- Basic output formatting
-- Metadata handling (empty, multiple columns)
-- Header generation (0, 6, 9 columns)
-- Precision verification (2 decimal places)
-- Edge cases (zero values, large values, all areas)
+### TTS-Enabled Overlap Tests (4 tests)
+- `test_tts_enabled_downstream_region`: TTS zone detection
+- `test_tts_disabled_downstream_region`: DOWNSTREAM when tts=0
+- `test_tts_negative_strand`: Negative strand TTS at start
+- `test_large_tts_zone`: Extended TTS zone
+
+### TSS Edge Cases (6 tests)
+- `test_tss_region_at_exact_boundary`: Exact 200bp boundary
+- `test_tss_promoter_boundary`: TSS/Promoter transition
+- `test_tss_upstream_boundary`: Promoter/Upstream transition
+- `test_tss_very_small_region`: 1bp region
+- `test_tss_very_large_region`: Multi-zone spanning
+- `test_tss_negative_strand_mirror_math`: Coord mirroring
+
+### TTS Edge Cases (5 tests)
+- `test_tts_region_at_exact_boundary`: Exact boundary
+- `test_tts_beyond_zone`: DOWNSTREAM detection
+- `test_tts_very_small_region`: 1bp region
+- `test_tts_negative_strand_boundary`: Neg strand TTS
+- `test_tts_spans_zone_and_downstream`: Zone spanning
 
 ## Running Tests
 ```bash
-cargo test --test unit_tests  # Unit tests (119 tests)
+cargo test --test unit_tests  # Unit tests (157 tests)
 cargo test --lib              # Library tests (55 tests)
-cargo test                    # All tests (174 total)
+cargo test                    # All tests (212 total + 1 integration)
 ```
 
 ## Next Steps for Coverage
-1. Add tests for `parser/bed.rs` BedReader with gzip files
-2. Add tests for `parser/gtf.rs` edge cases (custom ID tags)
-3. Add integration tests with real BED/GTF sample files
-4. Test Config with various parameter combinations
-5. Increase coverage of error paths in parsers
+1. Add integration tests with real BED/GTF sample files
+2. Test BedReader with gzip-compressed files
+3. Test GTF parsing with custom ID tags (gene_name, etc.)
+4. Increase coverage of error paths in parsers
+5. Add tests for Region edge cases (negative coords, etc.)

@@ -4932,7 +4932,6 @@ mod test_candidate_extended {
 // -------------------------------------------------------------------------
 
 mod test_match_regions_to_genes {
-    use super::*;
     use rgmatch::matcher::overlap::match_regions_to_genes;
     use rgmatch::types::{Exon, Strand, Transcript};
     use rgmatch::{Config, Gene, Region, ReportLevel};

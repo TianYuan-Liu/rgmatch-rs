@@ -31,3 +31,6 @@ tests/logs/
 # Editor files
 *.swp
 *.swo
+
+# Local scripts
+scripts/

@@ -6083,3 +6083,90 @@ mod test_output_format_validation {
         assert!(line.contains("100.00"));
     }
 }
+
+// -------------------------------------------------------------------------
+// VecDeque Result Buffering Logic Tests
+// -------------------------------------------------------------------------
+// Tests for the buffering logic used in write_results_ordered to handle
+// out-of-order result arrival from parallel processing.
+
+mod test_result_ordering {
+    use std::collections::VecDeque;
+
+    /// Simulate the buffering logic from write_results_ordered.
+    /// Takes a sequence of arriving seq_ids and returns the order they would be output.
+    fn buffer_and_drain(arrivals: Vec<u64>) -> Vec<u64> {
+        let mut pending: VecDeque<Option<u64>> = VecDeque::new();
+        let mut next_expected: u64 = 0;
+        let mut output: Vec<u64> = Vec::new();
+
+        for seq_id in arrivals {
+            let index = (seq_id - next_expected) as usize;
+            while pending.len() <= index {
+                pending.push_back(None);
+            }
+            pending[index] = Some(seq_id);
+
+            while matches!(pending.front(), Some(Some(_))) {
+                let id = pending.pop_front().unwrap().unwrap();
+                output.push(id);
+                next_expected += 1;
+            }
+        }
+        output
+    }
+
+    #[test]
+    fn test_in_order_arrival() {
+        // Results arrive in order: 0, 1, 2, 3
+        let arrivals = vec![0, 1, 2, 3];
+        let output = buffer_and_drain(arrivals);
+        assert_eq!(output, vec![0, 1, 2, 3]);
+    }
+
+    #[test]
+    fn test_reverse_order_arrival() {
+        // Results arrive in reverse: 3, 2, 1, 0
+        let arrivals = vec![3, 2, 1, 0];
+        let output = buffer_and_drain(arrivals);
+        assert_eq!(output, vec![0, 1, 2, 3]);
+    }
+
+    #[test]
+    fn test_out_of_order_arrival() {
+        // Results arrive out of order: 2, 0, 3, 1
+        let arrivals = vec![2, 0, 3, 1];
+        let output = buffer_and_drain(arrivals);
+        assert_eq!(output, vec![0, 1, 2, 3]);
+    }
+
+    #[test]
+    fn test_single_result() {
+        let arrivals = vec![0];
+        let output = buffer_and_drain(arrivals);
+        assert_eq!(output, vec![0]);
+    }
+
+    #[test]
+    fn test_empty_results() {
+        let arrivals: Vec<u64> = vec![];
+        let output = buffer_and_drain(arrivals);
+        assert!(output.is_empty());
+    }
+
+    #[test]
+    fn test_large_gap_then_fill() {
+        // seq_id 5 arrives first, then 0-4
+        let arrivals = vec![5, 0, 1, 2, 3, 4];
+        let output = buffer_and_drain(arrivals);
+        assert_eq!(output, vec![0, 1, 2, 3, 4, 5]);
+    }
+
+    #[test]
+    fn test_batch_arrival() {
+        // Simulate parallel batch completion
+        let arrivals = vec![2, 3, 0, 1, 6, 7, 4, 5];
+        let output = buffer_and_drain(arrivals);
+        assert_eq!(output, vec![0, 1, 2, 3, 4, 5, 6, 7]);
+    }
+}

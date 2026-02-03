@@ -5,7 +5,7 @@
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 use crossbeam_channel::{bounded, Receiver, Sender};
-use std::collections::BTreeMap;
+use std::collections::VecDeque;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
@@ -664,19 +664,28 @@ fn write_results_ordered(
     let num_meta_columns = header_rx.recv().unwrap_or(0);
     write_header(&mut writer, num_meta_columns)?;
 
-    // Buffer for out-of-order results
-    let mut pending: BTreeMap<u64, WorkResult> = BTreeMap::new();
+    // Buffer for out-of-order results using VecDeque for O(1) operations
+    // Since seq_id is dense sequential integers starting from 0, we use
+    // index = seq_id - next_expected to map into the deque
+    let mut pending: VecDeque<Option<WorkResult>> = VecDeque::new();
     let mut next_expected: u64 = 0;
     let mut lines_written: usize = 0;
 
     for result in result_rx {
-        pending.insert(result.seq_id, result);
+        // Insert at the correct position based on seq_id offset
+        let index = (result.seq_id - next_expected) as usize;
+        // Ensure VecDeque is large enough
+        while pending.len() <= index {
+            pending.push_back(None);
+        }
+        pending[index] = Some(result);
 
         // Track max pending size for congestion analysis
         metrics.update_max_pending(pending.len());
 
-        // Write all ready consecutive results
-        while let Some(r) = pending.remove(&next_expected) {
+        // Write all ready consecutive results from the front
+        while matches!(pending.front(), Some(Some(_))) {
+            let r = pending.pop_front().unwrap().unwrap();
             for (region, candidates) in &r.results {
                 for candidate in candidates {
                     // Time formatting
